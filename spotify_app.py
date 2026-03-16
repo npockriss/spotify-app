@@ -26,7 +26,7 @@ from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
 import spotipy
 
-REDIRECT_URI = 'https://yourname-spotify-analyzer-abc123.streamlit.app/'
+REDIRECT_URI = 'https://spotify-app-onnyqzrqbzkqxnrpkdnxlg.streamlit.app/'
 
 warnings.filterwarnings('ignore')
 
