@@ -103,10 +103,12 @@ def load_csv(file_bytes, filename):
     if 'Track URI' in df.columns:
         df['Spotify Track Id'] = df['Track URI'].str.split(':').str[-1]
 
-    # Only convert if actually on 0-1 scale
-    for col in ['Energy', 'Dance', 'Valence', 'Acoustic', 'Instrumental', 'Speech', 'Live']:
-        if col in df.columns and df[col].max() <= 1.5:
-            df[col] = (df[col] * 100).round(1)
+    # Native Spotify export has 0-1 features (has Track URI column)
+    # Exportify exports are already 0-100 — no conversion needed
+    if 'Track URI' in df.columns:
+        for col in ['Energy', 'Dance', 'Valence', 'Acoustic', 'Instrumental', 'Speech', 'Live']:
+            if col in df.columns:
+                df[col] = (df[col] * 100).round(1)
 
     if 'Duration (ms)' in df.columns:
         df['dur_sec'] = df['Duration (ms)'] // 1000
@@ -482,6 +484,7 @@ def build_playlist_definitions(df, min_songs=30, min_cohesion=0.85):
     return keep
 
 
+@st.cache_data
 def evaluate_playlists(df, X_raw, X_scaled, playlist_defs):
     overall_std = pd.DataFrame(X_scaled, columns=FEATURES).std()
     results = []
@@ -862,12 +865,15 @@ with st.sidebar:
     with st.expander('How to get your Spotify credentials'):
         st.markdown("""
         1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and log in
-        2. Click **Create app**, name it anything
+        2. Click **Create app**, name it anything, set category to anything
         3. Under **Redirect URIs** add exactly:
         """)
         st.code('https://playlist-analyzer.streamlit.app/')
         st.markdown("""
-        4. Copy your **Client ID** and **Client Secret** into the boxes below
+        4. Click **Save**, then go to **Settings** in your app
+        5. Your **Client ID** is shown on the main page
+        6. Click **View client secret** to reveal your **Client Secret**
+        7. Paste both into the boxes below
         """)
 
     client_id     = st.text_input('Client ID',     type='password')
@@ -910,6 +916,13 @@ if not uploaded:
 # ── Run analysis ──────────────────────────────────────────
 file_bytes    = uploaded.read()
 df_raw, pname = load_csv(file_bytes, uploaded.name)
+
+missing = [f for f in FEATURES if f not in df_raw.columns]
+if len(missing) > 4:
+    st.error(f'This doesn\'t look like a Spotify CSV — missing columns: {", ".join(missing)}. '
+             f'Export your playlist from exportify.net and try again.')
+    st.stop()
+
 df, X_raw, X_scaled, scaler = build_features(df_raw)
 
 with st.spinner('Finding clusters...'):
@@ -1146,7 +1159,8 @@ with tab4:
     if discover_file:
         disc_bytes        = discover_file.read()
         df_disc, disc_name = load_csv(disc_bytes, discover_file.name)
-        df_disc, _, _, _   = build_features(df_disc)
+        df_disc = df_disc.dropna(subset=FEATURES).reset_index(drop=True)
+        X_disc  = scaler.transform(df_disc[FEATURES].values)
 
         st.caption(f'Scoring {len(df_disc)} songs from "{disc_name}" '
                    f'against your taste...')
