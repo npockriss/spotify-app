@@ -432,7 +432,8 @@ def playlist_name_and_desc(base_name, df, mask, source_name, used_names=None):
     return full_name, desc
 
 
-def build_playlist_definitions(df):
+def build_playlist_definitions(df, min_songs=30, min_cohesion=0.85):
+    """Only return playlists that are big enough and cohesive enough to be worth making."""
     e75     = df['Energy'].quantile(0.75)
     e50     = df['Energy'].median()
     e25     = df['Energy'].quantile(0.25)
@@ -441,7 +442,8 @@ def build_playlist_definitions(df):
     d65     = df['Dance'].quantile(0.65)
     ac50    = df['Acoustic'].quantile(0.50)
     bpm_med = df['BPM'].median()
-    return [
+
+    candidates = [
         {'base_name': 'Workout',
          'mask': (df['Energy'] > e75) & (df['Dance'] > d65) & (df['Instrumental'] < 30)},
         {'base_name': 'Deep Focus',
@@ -456,6 +458,28 @@ def build_playlist_definitions(df):
         {'base_name': 'Easy Company',
          'mask': (df['Valence'] > v65) & df['Energy'].between(e25, e75) & (df['Speech'] < 15)},
     ]
+
+    X_raw = df[FEATURES].values
+
+    keep = []
+    for pl in candidates:
+        idx = np.where(pl['mask'])[0]
+
+        # Skip if too few songs
+        if len(idx) < min_songs:
+            continue
+
+        # Skip if cohesion too low (songs don't actually sound alike)
+        subset = X_raw[idx]
+        sim    = cosine_similarity(subset)
+        n      = len(idx)
+        upper  = sim[np.triu_indices(n, k=1)]
+        if float(upper.mean()) < min_cohesion:
+            continue
+
+        keep.append(pl)
+
+    return keep
 
 
 def evaluate_playlists(df, X_raw, X_scaled, playlist_defs):
