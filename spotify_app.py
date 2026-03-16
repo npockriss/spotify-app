@@ -537,6 +537,44 @@ def exchange_code(code, client_id, client_secret, redirect_uri):
                       'code': code, 'redirect_uri': redirect_uri})
     return resp.json()
 
+def get_new_recommendations(access_token, df, n=20):
+    """
+    Use the top 5 songs from your taste centroid as seeds,
+    ask Spotify for similar songs not already in your library.
+    """
+    try:
+        sp = spotipy.Spotify(auth=access_token)
+
+        # Seed with top 5 most representative songs
+        seed_ids = (df.nlargest(5, 'rec_score')['Spotify Track Id'].tolist())
+
+        # Get recommendations
+        results = sp.recommendations(
+            seed_tracks=seed_ids[:5],
+            limit=n,
+        )
+        if not results or not results.get('tracks'):
+            return None
+
+        # Build dataframe of recommendations
+        existing_ids = set(df['Spotify Track Id'].tolist())
+        rows = []
+        for t in results['tracks']:
+            if t['id'] in existing_ids:
+                continue  # skip songs already in library
+            rows.append({
+                'Song':             t['name'],
+                'Artist':           ', '.join(a['name'] for a in t['artists']),
+                'Spotify Track Id': t['id'],
+                'Popularity':       t['popularity'],
+                'Preview URL':      t.get('preview_url'),
+                'Spotify URL':      t['external_urls']['spotify'],
+            })
+
+        return pd.DataFrame(rows) if rows else None
+
+    except Exception as e:
+        return str(e)  # return error string so we can display it
 
 def push_playlist_web(access_token, full_name, description, track_ids):
     sp  = spotipy.Spotify(auth=access_token)
@@ -657,6 +695,100 @@ def plot_rec_scores(df, n=20):
                       xaxis_title='Score', yaxis=dict(autorange='reversed'))
     return fig
 
+def plot_mood_quadrant(df):
+    # Add quadrant labels
+    def quadrant(row):
+        if row['Energy'] > 50 and row['Valence'] > 50:   return 'Happy & Energetic'
+        if row['Energy'] > 50 and row['Valence'] <= 50:  return 'Intense & Dark'
+        if row['Energy'] <= 50 and row['Valence'] > 50:  return 'Chill & Positive'
+        return 'Sad & Quiet'
+
+    df2 = df.copy()
+    df2['Quadrant'] = df2.apply(quadrant, axis=1)
+
+    quad_colors = {
+        'Happy & Energetic': '#22c55e',
+        'Intense & Dark':    '#ef4444',
+        'Chill & Positive':  '#06b6d4',
+        'Sad & Quiet':       '#8b5cf6',
+    }
+
+    fig = go.Figure()
+    for quad, color in quad_colors.items():
+        sub = df2[df2['Quadrant'] == quad]
+        fig.add_trace(go.Scatter(
+            x=sub['Valence'], y=sub['Energy'],
+            mode='markers',
+            name=f'{quad} ({len(sub)})',
+            marker=dict(color=color, size=6, opacity=0.6),
+            text=sub['Song'] + '<br>' + sub['Artist'],
+            customdata=sub[['Song', 'Artist', 'Spotify Track Id']].values,
+            hovertemplate='<b>%{text}</b><extra></extra>',
+        ))
+
+    # Quadrant dividers and labels
+    fig.add_hline(y=50, line_dash='dash', line_color='rgba(255,255,255,0.2)')
+    fig.add_vline(x=50, line_dash='dash', line_color='rgba(255,255,255,0.2)')
+    for x, y, text in [(75,85,'Happy & Energetic'),(25,85,'Intense & Dark'),
+                       (75,15,'Chill & Positive'),(25,15,'Sad & Quiet')]:
+        fig.add_annotation(x=x, y=y, text=text, showarrow=False,
+                          font=dict(color='rgba(255,255,255,0.3)', size=11))
+
+    fig.update_layout(
+        title='Mood Quadrant',
+        xaxis=dict(title='Valence (sad → happy)', range=[0,100]),
+        yaxis=dict(title='Energy (calm → intense)', range=[0,100]),
+        height=550,
+    )
+    return fig
+
+def plot_cluster_evolution(df, cluster_names):
+    if df['Added At'].isna().all():
+        return None
+
+    df2 = df.copy()
+    df2['added_month'] = df2['Added At'].dt.to_period('M').astype(str)
+
+    # Count songs per cluster per month
+    monthly = (df2.groupby(['added_month', 'cluster_name'])
+                  .size()
+                  .reset_index(name='count'))
+
+    # Skip bulk-import months
+    totals  = monthly.groupby('added_month')['count'].sum()
+    keep    = totals[totals <= totals.median() * 3].index
+    monthly = monthly[monthly['added_month'].isin(keep)]
+
+    if len(monthly['added_month'].unique()) < 3:
+        return None
+
+    # Convert to percentage so months with different totals are comparable
+    totals  = monthly.groupby('added_month')['count'].transform('sum')
+    monthly['pct'] = (monthly['count'] / totals * 100).round(1)
+
+    fig = go.Figure()
+    for i, name in cluster_names.items():
+        sub = monthly[monthly['cluster_name'] == name]
+        fig.add_trace(go.Scatter(
+            x=sub['added_month'], y=sub['pct'],
+            name=name, mode='lines+markers',
+            line=dict(color=COLORS[i % len(COLORS)], width=2),
+            marker=dict(size=5),
+            stackgroup='one',  # stacked area chart
+            hovertemplate=f'{name}: %{{y:.1f}}%<extra></extra>',
+        ))
+
+    fig.update_layout(
+        title='How Your Vibe Mix Changed Over Time',
+        yaxis=dict(title='% of songs added', range=[0, 100]),
+        xaxis_tickangle=-45,
+        height=400,
+        hovermode='x unified',
+    )
+    return fig
+
+
+
 
 # ════════════════════════════════════════════════════════════
 #  APP
@@ -753,8 +885,9 @@ c4.metric('Avg Valence',  f'{df["Valence"].mean():.0f}')
 c5.metric('Avg BPM',      f'{df["BPM"].mean():.0f}')
 
 # ── Tabs ──────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ['🔮 Clusters', '📈 Taste Over Time', '⭐ Recommender', '🎛️ Playlists', '📊 Raw Data']
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    ['🔮 Clusters', '📈 Taste Over Time', '⭐ Recommender',
+     '🔍 Discover', '🎛️ Playlists', '📊 Raw Data']
 )
 
 with tab1:
@@ -780,6 +913,33 @@ with tab1:
                 cc[i].metric(feat, f'{p[feat]:.0f}')
             top5 = df[df['cluster'] == c].nlargest(5, 'Popularity')[['Song','Artist','Popularity']]
             st.dataframe(top5, hide_index=True, use_container_width=True)
+
+    st.divider()
+    st.subheader('Mood Quadrant')
+    st.plotly_chart(plot_mood_quadrant(df), use_container_width=True)
+
+    # Audio preview — only shows if Spotify is connected
+    if 'spotify_token' in st.session_state:
+        st.caption('Preview a song — search by name:')
+        search = st.text_input('Song name', placeholder='e.g. Congratulations')
+        if search:
+            matches = df[df['Song'].str.contains(search, case=False, na=False)].head(5)
+            if not matches.empty:
+                for _, row in matches.iterrows():
+                    col1, col2 = st.columns([3, 1])
+                    col1.write(f"**{row['Song']}** — {row['Artist']}")
+                    if col2.button('Preview', key=row['Spotify Track Id']):
+                        try:
+                            sp      = spotipy.Spotify(auth=st.session_state['spotify_token'])
+                            track   = sp.track(row['Spotify Track Id'])
+                            preview = track.get('preview_url')
+                            if preview:
+                                st.audio(preview, format='audio/mp3')
+                            else:
+                                st.caption('No preview available for this track.')
+                        except Exception as e:
+                            st.error(f'Could not load preview: {e}')
+
 
 with tab2:
     fig = plot_time_trends(df)
@@ -810,6 +970,13 @@ with tab2:
         """)
     else:
         st.info('Not enough monthly data to show a trend (need 3+ months).')
+    
+    st.divider()
+    st.subheader('Vibe mix over time')
+    st.caption('What % of songs you added each month fell into each cluster')
+    fig2 = plot_cluster_evolution(df, cluster_names)
+    if fig2:
+        st.plotly_chart(fig2, use_container_width=True)
 
 with tab3:
     st.plotly_chart(plot_rec_scores(df), use_container_width=True)
@@ -820,6 +987,34 @@ with tab3:
     st.dataframe(out, hide_index=True, use_container_width=True)
 
 with tab4:
+    st.subheader('Songs you might like')
+    st.caption('Based on your top 5 best-fit songs as seeds — not already in your library.')
+
+    if 'spotify_token' not in st.session_state:
+        st.info('Connect Spotify in the sidebar to get recommendations.')
+    else:
+        if st.button('Find new songs for me', type='primary'):
+            with st.spinner('Asking Spotify for recommendations...'):
+                recs = get_new_recommendations(
+                    st.session_state['spotify_token'], df
+                )
+
+            if recs is None:
+                st.warning('No recommendations returned — try a different playlist.')
+            elif isinstance(recs, str):
+                st.error(f'Spotify API error: {recs}')
+                st.caption('Note: Spotify deprecated the recommendations endpoint '
+                           'for some apps. This feature may not be available.')
+            else:
+                st.success(f'Found {len(recs)} songs you might like!')
+                for _, row in recs.iterrows():
+                    col1, col2, col3 = st.columns([4, 1, 1])
+                    col1.write(f"**{row['Song']}** — {row['Artist']}")
+                    col2.markdown(f"[Open]({row['Spotify URL']})")
+                    if row['Preview URL'] and col3.button('▶ Play', key=f"rec_{row['Spotify Track Id']}"):
+                        st.audio(row['Preview URL'], format='audio/mp3')
+
+with tab5:
     st.subheader('Generated playlists')
 
     # Show scores table
@@ -885,7 +1080,7 @@ with tab4:
                 sample = df[pl['mask']].nlargest(10, 'Popularity')[['Song','Artist','Energy','Valence','Dance']]
                 st.dataframe(sample, hide_index=True, use_container_width=True)
 
-with tab5:
+with tab6:
     st.subheader('Full dataset')
     display_cols = ['Song','Artist','cluster_name','rec_score',
                     'Energy','Valence','Dance','Acoustic','BPM','Popularity']
