@@ -582,6 +582,36 @@ def push_playlist_web(access_token, full_name, description, track_ids):
 #  CHARTS (Plotly)
 # ════════════════════════════════════════════════════════════
 
+def mood_report(df):
+    """
+    Blunt summary of what the recent music says about your mood.
+    Compares last 3 months of additions to the full library.
+    """
+    df2 = df.dropna(subset=['Added At']).copy()
+    if df2.empty:
+        return None
+
+    cutoff = df2['Added At'].max() - pd.DateOffset(months=3)
+    recent = df2[df2['Added At'] >= cutoff]
+    older  = df2[df2['Added At'] < cutoff]
+
+    if len(recent) < 10:
+        return None
+
+    stats = {
+        'recent_valence':  recent['Valence'].mean(),
+        'overall_valence': df2['Valence'].mean(),
+        'recent_energy':   recent['Energy'].mean(),
+        'overall_energy':  df2['Energy'].mean(),
+        'recent_acoustic': recent['Acoustic'].mean(),
+        'overall_acoustic':df2['Acoustic'].mean(),
+        'recent_count':    len(recent),
+        'low_valence_pct': (recent['Valence'] < 35).mean() * 100,
+        'prev_low_valence_pct': (older['Valence'] < 35).mean() * 100 if len(older) > 0 else None,
+    }
+
+    return stats
+
 def plot_elbow(k_range, inertias, best_k):
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=list(k_range), y=inertias, mode='lines+markers',
@@ -775,7 +805,41 @@ def plot_cluster_evolution(df, cluster_names):
     )
     return fig
 
+def musical_era(df):
+    """
+    Which decade of music dominates the library,
+    and has that shifted over time?
+    """
+    df2 = df.dropna(subset=['Album Date']).copy()
+    if df2.empty:
+        return None, None
 
+    df2['decade'] = (df2['Album Date'].dt.year // 10 * 10).astype(int)
+    df2['decade_label'] = df2['decade'].astype(str) + 's'
+
+    # Filter to reasonable range
+    df2 = df2[df2['decade'].between(1950, 2030)]
+
+    # Overall breakdown
+    overall = (df2.groupby('decade_label').size()
+                  .reset_index(name='count')
+                  .sort_values('decade_label'))
+    overall['pct'] = (overall['count'] / overall['count'].sum() * 100).round(1)
+
+    # Over time — how has dominant decade shifted?
+    era_over_time = None
+    if 'Added At' in df2.columns and not df2['Added At'].isna().all():
+        df2['added_month'] = df2['Added At'].dt.to_period('M').astype(str)
+        monthly = (df2.groupby(['added_month', 'decade_label'])
+                      .size().reset_index(name='count'))
+        totals  = monthly.groupby('added_month')['count'].transform('sum')
+        monthly['pct'] = (monthly['count'] / totals * 100).round(1)
+        # Skip bulk months
+        month_totals = monthly.groupby('added_month')['count'].sum()
+        keep = month_totals[month_totals <= month_totals.median() * 3].index
+        era_over_time = monthly[monthly['added_month'].isin(keep)]
+
+    return overall, era_over_time
 
 
 # ════════════════════════════════════════════════════════════
@@ -872,6 +936,67 @@ c3.metric('Avg Energy',   f'{df["Energy"].mean():.0f}')
 c4.metric('Avg Valence',  f'{df["Valence"].mean():.0f}')
 c5.metric('Avg BPM',      f'{df["BPM"].mean():.0f}')
 
+# ── Mood report card ──────────────────────────────────────
+report = mood_report(df)
+if report:
+    v_delta = report['recent_valence'] - report['overall_valence']
+    e_delta = report['recent_energy']  - report['overall_energy']
+    ac_delta = report['recent_acoustic'] - report['overall_acoustic']
+
+    # Pick the most notable finding
+    findings = []
+
+    if report['low_valence_pct'] > 60:
+        findings.append(f"**{report['low_valence_pct']:.0f}% of your recent adds are low valence.** "
+                        f"You've been adding a lot of sad music lately.")
+    elif report['low_valence_pct'] > 40:
+        findings.append(f"**{report['low_valence_pct']:.0f}% of your recent adds are low valence.** "
+                        f"Your recent taste is leaning melancholic.")
+
+    if v_delta < -8:
+        findings.append(f"**Valence is down {abs(v_delta):.0f} pts** compared to your overall library. "
+                        f"You're adding darker music than usual.")
+    elif v_delta > 8:
+        findings.append(f"**Valence is up {abs(v_delta):.0f} pts** compared to your overall library. "
+                        f"You're in a good place lately.")
+
+    if e_delta < -8:
+        findings.append(f"**Energy is down {abs(e_delta):.0f} pts.** "
+                        f"Your recent adds are noticeably calmer than your usual taste.")
+    elif e_delta > 8:
+        findings.append(f"**Energy is up {abs(e_delta):.0f} pts.** "
+                        f"You've been adding high-energy music lately.")
+
+    if ac_delta > 10:
+        findings.append(f"**Acousticness is up {ac_delta:.0f} pts.** "
+                        f"You're going through an acoustic phase.")
+
+    if report['prev_low_valence_pct'] is not None:
+        prev = report['prev_low_valence_pct']
+        curr = report['low_valence_pct']
+        if curr - prev > 15:
+            findings.append(f"**Sad music went from {prev:.0f}% → {curr:.0f}%** of your adds. "
+                            f"Something's going on.")
+        elif prev - curr > 15:
+            findings.append(f"**Sad music went from {prev:.0f}% → {curr:.0f}%** of your adds. "
+                            f"You're doing better.")
+
+    if not findings:
+        findings.append(f"Your recent adds ({report['recent_count']} songs) are pretty consistent "
+                        f"with your overall taste. No dramatic mood shifts.")
+
+    # Display as a card
+    with st.expander(f'📊 Vibe check — last 3 months ({report["recent_count"]} songs)', expanded=True):
+        for f in findings:
+            st.markdown(f'— {f}')
+        c1, c2, c3 = st.columns(3)
+        c1.metric('Recent Valence',  f'{report["recent_valence"]:.0f}',
+                  delta=f'{v_delta:+.0f} vs overall')
+        c2.metric('Recent Energy',   f'{report["recent_energy"]:.0f}',
+                  delta=f'{e_delta:+.0f} vs overall')
+        c3.metric('Recent Acoustic', f'{report["recent_acoustic"]:.0f}',
+                  delta=f'{ac_delta:+.0f} vs overall')
+
 # ── Tabs ──────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
     ['🔮 Clusters', '📈 Taste Over Time', '⭐ Recommender',
@@ -943,6 +1068,60 @@ with tab2:
     fig2 = plot_cluster_evolution(df, cluster_names)
     if fig2:
         st.plotly_chart(fig2, use_container_width=True)
+    
+    st.divider()
+    st.subheader('Your musical era')
+
+    overall_era, era_over_time = musical_era(df)
+
+    if overall_era is not None and not overall_era.empty:
+        # Overall bar chart
+        fig_era = go.Figure(go.Bar(
+            x=overall_era['decade_label'],
+            y=overall_era['pct'],
+            marker_color='#1db954',
+            text=overall_era['pct'].astype(str) + '%',
+            textposition='outside',
+        ))
+        fig_era.update_layout(
+            title='What decade is your library from?',
+            yaxis_title='% of library',
+            height=300,
+            yaxis=dict(range=[0, overall_era['pct'].max() + 10]),
+        )
+        st.plotly_chart(fig_era, use_container_width=True)
+
+        # Dominant era callout
+        top_era = overall_era.nlargest(1, 'pct').iloc[0]
+        st.markdown(f"**{top_era['pct']:.0f}% of your library is from the {top_era['decade_label']}.** "
+                    f"You're mostly a {top_era['decade_label']} listener.")
+
+        # Era shift over time
+        if era_over_time is not None and len(era_over_time['added_month'].unique()) >= 3:
+            decades = sorted(era_over_time['decade_label'].unique())
+            decade_colors = {
+                '1960s': '#f43f5e', '1970s': '#f97316', '1980s': '#f59e0b',
+                '1990s': '#22c55e', '2000s': '#06b6d4', '2010s': '#8b5cf6',
+                '2020s': '#ec4899',
+            }
+            fig_shift = go.Figure()
+            for decade in decades:
+                sub = era_over_time[era_over_time['decade_label'] == decade]
+                fig_shift.add_trace(go.Scatter(
+                    x=sub['added_month'], y=sub['pct'],
+                    name=decade, mode='lines+markers',
+                    line=dict(color=decade_colors.get(decade, '#aaa'), width=2),
+                    marker=dict(size=4),
+                    stackgroup='one',
+                ))
+            fig_shift.update_layout(
+                title='Which era you\'ve been adding over time',
+                yaxis=dict(title='% of monthly adds', range=[0, 100]),
+                xaxis_tickangle=-45,
+                height=350,
+                hovermode='x unified',
+            )
+            st.plotly_chart(fig_shift, use_container_width=True)
 
 with tab3:
     st.plotly_chart(plot_rec_scores(df), use_container_width=True)
