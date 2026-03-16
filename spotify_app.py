@@ -906,28 +906,6 @@ with tab1:
     st.subheader('Mood Quadrant')
     st.plotly_chart(plot_mood_quadrant(df), use_container_width=True)
 
-    # Audio preview — only shows if Spotify is connected
-    if 'spotify_token' in st.session_state:
-        st.caption('Preview a song — search by name:')
-        search = st.text_input('Song name', placeholder='e.g. Congratulations')
-        if search:
-            matches = df[df['Song'].str.contains(search, case=False, na=False)].head(5)
-            if not matches.empty:
-                for _, row in matches.iterrows():
-                    col1, col2 = st.columns([3, 1])
-                    col1.write(f"**{row['Song']}** — {row['Artist']}")
-                    if col2.button('Preview', key=row['Spotify Track Id']):
-                        try:
-                            sp      = spotipy.Spotify(auth=st.session_state['spotify_token'])
-                            track   = sp.track(row['Spotify Track Id'])
-                            preview = track.get('preview_url')
-                            if preview:
-                                st.audio(preview, format='audio/mp3')
-                            else:
-                                st.caption('No preview available for this track.')
-                        except Exception as e:
-                            st.error(f'Could not load preview: {e}')
-
 
 with tab2:
     fig = plot_time_trends(df)
