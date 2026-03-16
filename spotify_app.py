@@ -32,14 +32,21 @@ REDIRECT_URI = 'https://playlist-analyzer.streamlit.app/'
 
 query = st.query_params
 if 'code' in query and 'spotify_token' not in st.session_state:
-    cid  = st.session_state.get('sp_client_id', '')
-    csec = st.session_state.get('sp_client_secret', '')
-    if cid and csec:
+    try:
+        # Decode credentials from state parameter
+        state     = query.get('state', '')
+        decoded   = base64.b64decode(state.encode()).decode()
+        cid, csec = decoded.split(':', 1)
         token_data = exchange_code(query['code'], cid, csec, REDIRECT_URI)
         if 'access_token' in token_data:
-            st.session_state['spotify_token'] = token_data['access_token']
+            st.session_state['spotify_token']    = token_data['access_token']
+            st.session_state['sp_client_id']     = cid
+            st.session_state['sp_client_secret'] = csec
             st.query_params.clear()
             st.rerun()
+    except Exception as e:
+        st.error(f'Auth failed: {e}')
+
 warnings.filterwarnings('ignore')
 
 # ── Page config ───────────────────────────────────────────
@@ -483,12 +490,17 @@ def evaluate_playlists(df, X_raw, X_scaled, playlist_defs):
 #  SPOTIFY OAUTH (browser-based, no local server needed)
 # ════════════════════════════════════════════════════════════
 
-def get_auth_url(client_id, redirect_uri):
+def get_auth_url(client_id, client_secret, redirect_uri):
+    # Encode credentials into state so they survive the redirect
+    state = base64.b64encode(
+        f'{client_id}:{client_secret}'.encode()
+    ).decode()
     params = {
         'client_id':     client_id,
         'response_type': 'code',
         'redirect_uri':  redirect_uri,
         'scope':         'playlist-modify-private playlist-modify-public',
+        'state':         state,
     }
     return 'https://accounts.spotify.com/authorize?' + urllib.parse.urlencode(params)
 
@@ -659,7 +671,7 @@ with st.sidebar:
 
     if 'spotify_token' not in st.session_state:
         if client_id and client_secret:
-            auth_url = get_auth_url(client_id, REDIRECT_URI)
+            auth_url = get_auth_url(client_id, client_secret, REDIRECT_URI)
             st.link_button('Connect Spotify', auth_url, use_container_width=True)
     else:
         st.success('✓ Spotify connected')
