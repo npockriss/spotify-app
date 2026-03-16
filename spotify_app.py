@@ -9,7 +9,7 @@ SETUP:
 SPOTIFY SETUP (each user needs their own):
   1. Go to developer.spotify.com/dashboard → Create app
   2. Set Redirect URI to your app URL + "/"  (e.g. https://yourapp.streamlit.app/)
-     For local dev use: http://localhost:8501/
+     For local dev use: http://127.0.0.1:8501/
   3. Enter Client ID + Secret in the app sidebar
 """
 
@@ -25,6 +25,8 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
 import spotipy
+
+REDIRECT_URI = 'https://yourname-spotify-analyzer-abc123.streamlit.app/'
 
 warnings.filterwarnings('ignore')
 
@@ -612,19 +614,18 @@ def plot_rec_scores(df, n=20):
 #  APP
 # ════════════════════════════════════════════════════════════
 
-# Handle Spotify OAuth callback
+
 query = st.query_params
 if 'code' in query and 'spotify_token' not in st.session_state:
-    with st.spinner('Connecting to Spotify...'):
-        cid  = st.session_state.get('sp_client_id', '')
-        csec = st.session_state.get('sp_client_secret', '')
-        ruri = st.session_state.get('sp_redirect_uri', '')
-        if cid and csec and ruri:
-            token_data = exchange_code(query['code'], cid, csec, ruri)
-            if 'access_token' in token_data:
-                st.session_state['spotify_token'] = token_data['access_token']
-                st.success('Connected to Spotify!')
-                st.query_params.clear()
+    cid  = st.session_state.get('sp_client_id', '')
+    csec = st.session_state.get('sp_client_secret', '')
+    if cid and csec:
+        token_data = exchange_code(query['code'], cid, csec, REDIRECT_URI)
+        if 'access_token' in token_data:
+            st.session_state['spotify_token'] = token_data['access_token']
+            st.query_params.clear()
+            st.rerun()
+
 
 # ── Sidebar ───────────────────────────────────────────────
 with st.sidebar:
@@ -635,30 +636,52 @@ with st.sidebar:
 
     st.divider()
     st.subheader('Spotify Connection')
-    st.caption('Needed only to push playlists. Get credentials at developer.spotify.com/dashboard')
+    st.caption('Only needed to push playlists to Spotify.')
 
-    client_id     = st.text_input('Client ID',     type='password',
-                                   value=st.session_state.get('sp_client_id', ''))
-    client_secret = st.text_input('Client Secret', type='password',
-                                   value=st.session_state.get('sp_client_secret', ''))
-    redirect_uri  = st.text_input('Redirect URI',
-                                   value=st.session_state.get('sp_redirect_uri',
-                                                               'http://localhost:8501/'),
-                                   help='Must match exactly what you set in your Spotify app settings')
+    client_id     = st.text_input('Client ID',     type='password')
+    client_secret = st.text_input('Client Secret', type='password')
+
+    REDIRECT_URI = 'https://spotify-app-onnyqzrqbzkqxnrpkdnxlg.streamlit.app/'
 
     if client_id:
-        st.session_state['sp_client_id']      = client_id
-        st.session_state['sp_client_secret']  = client_secret
-        st.session_state['sp_redirect_uri']   = redirect_uri
+        st.session_state['sp_client_id']     = client_id
+        st.session_state['sp_client_secret'] = client_secret
 
-    if 'spotify_token' in st.session_state:
+    if 'spotify_token' not in st.session_state:
+        if client_id and client_secret:
+
+            auth_url = get_auth_url(client_id, REDIRECT_URI)
+            st.markdown(f'**Step 1:** [Click here to log in to Spotify]({auth_url})')
+            st.caption(
+                'After clicking, Spotify will redirect you to a page that '
+                'looks broken or blank. That is normal. '
+                'Copy the full URL from your browser address bar and '
+                'paste it in the box below.'
+            )
+
+            pasted = st.text_input('Step 2: Paste the redirect URL here')
+            if pasted and '?code=' in pasted:
+                try:
+                    code = urllib.parse.parse_qs(
+                        urllib.parse.urlparse(pasted).query
+                    )['code'][0]
+                    token_data = exchange_code(
+                        code, client_id, client_secret, REDIRECT_URI
+                    )
+                    if 'access_token' in token_data:
+                        st.session_state['spotify_token'] = token_data['access_token']
+                        st.success('Connected!')
+                        st.rerun()
+                    else:
+                        st.error('Auth failed — double check your Client ID and Secret.')
+                except Exception as e:
+                    st.error(f'Something went wrong: {e}')
+    else:
         st.success('✓ Spotify connected')
         if st.button('Disconnect'):
             del st.session_state['spotify_token']
             st.rerun()
-    elif client_id and client_secret:
-        auth_url = get_auth_url(client_id, redirect_uri)
-        st.link_button('Connect Spotify', auth_url, use_container_width=True)
+    
 
 # ── Main area ─────────────────────────────────────────────
 if not uploaded:
