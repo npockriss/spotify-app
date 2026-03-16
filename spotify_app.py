@@ -5,12 +5,6 @@ SETUP:
   1. pip install streamlit pandas numpy scikit-learn plotly spotipy requests
   2. streamlit run spotify_app.py
   3. Deploy free at share.streamlit.io — share the URL with anyone
-
-SPOTIFY SETUP (each user needs their own):
-  1. Go to developer.spotify.com/dashboard → Create app
-  2. Set Redirect URI to your app URL + "/"  (e.g. https://yourapp.streamlit.app/)
-     For local dev use: http://127.0.0.1:8501/
-  3. Enter Client ID + Secret in the app sidebar
 """
 
 import hashlib, time, warnings, base64, urllib.parse
@@ -26,7 +20,7 @@ from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
 import spotipy
 
-REDIRECT_URI = 'https://spotify-app-onnyqzrqbzkqxnrpkdnxlg.streamlit.app/'
+REDIRECT_URI = 'https://playlist-analyzer.streamlit.app/'
 
 warnings.filterwarnings('ignore')
 
@@ -643,7 +637,7 @@ with st.sidebar:
         2. Click **Create app**, name it anything
         3. Under **Redirect URIs** add exactly:
         """)
-        st.code('https://spotify-app-onnyqzrqbzkqxnrpkdnxlg.streamlit.app/')
+        st.code('https://playlist-analyzer.streamlit.app/')
         st.markdown("""
         4. Copy your **Client ID** and **Client Secret** into the boxes below
         """)
@@ -651,7 +645,7 @@ with st.sidebar:
     client_id     = st.text_input('Client ID',     type='password')
     client_secret = st.text_input('Client Secret', type='password')
 
-    REDIRECT_URI = 'https://spotify-app-onnyqzrqbzkqxnrpkdnxlg.streamlit.app/'
+    REDIRECT_URI = 'https://playlist-analyzer.streamlit.app/'
 
     if client_id:
         st.session_state['sp_client_id']     = client_id
