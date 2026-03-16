@@ -66,4 +66,4 @@ Screenshots
 Add screenshots here — mood quadrant and cluster map are the most visually striking
 
 Author
-Noah Pockriss — sophomore at [your university], studying Math/Statistics with a Data Science minor
+Noah Pockriss — sophomore at Vassar College, studying Math/Statistics with a Data Science minor
