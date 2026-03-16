@@ -651,6 +651,7 @@ with st.sidebar:
         if client_id and client_secret:
 
             auth_url = get_auth_url(client_id, REDIRECT_URI)
+            st.code(auth_url)
             st.markdown(f'**Step 1:** [Click here to log in to Spotify]({auth_url})')
             st.caption(
                 'After clicking, Spotify will redirect you to a page that '
