@@ -537,44 +537,32 @@ def exchange_code(code, client_id, client_secret, redirect_uri):
                       'code': code, 'redirect_uri': redirect_uri})
     return resp.json()
 
-def get_new_recommendations(access_token, df, n=20):
+def get_recommendations_from_csv(df_main, df_discover, scaler, n=20):
     """
-    Use the top 5 songs from your taste centroid as seeds,
-    ask Spotify for similar songs not already in your library.
+    Score songs in df_discover against the taste centroid of df_main.
+    Returns top n songs not already in df_main.
     """
-    try:
-        sp = spotipy.Spotify(auth=access_token)
+    # Build ideal vector from df_main
+    X_main    = df_main[FEATURES].values
+    top_songs = df_main[df_main['Popularity'] >= df_main['Popularity'].quantile(0.70)]
+    ideal_raw = top_songs[FEATURES].mean().values.reshape(1, -1)
 
-        # Seed with top 5 most representative songs
-        seed_ids = (df.nlargest(5, 'rec_score')['Spotify Track Id'].tolist())
+    # Drop songs already in main playlist
+    existing  = set(df_main['Spotify Track Id'].tolist())
+    df_new    = df_discover[~df_discover['Spotify Track Id'].isin(existing)].copy()
+    df_new    = df_new.dropna(subset=FEATURES).reset_index(drop=True)
 
-        # Get recommendations
-        results = sp.recommendations(
-            seed_tracks=seed_ids[:5],
-            limit=n,
-        )
-        if not results or not results.get('tracks'):
-            return None
+    if df_new.empty:
+        return None
 
-        # Build dataframe of recommendations
-        existing_ids = set(df['Spotify Track Id'].tolist())
-        rows = []
-        for t in results['tracks']:
-            if t['id'] in existing_ids:
-                continue  # skip songs already in library
-            rows.append({
-                'Song':             t['name'],
-                'Artist':           ', '.join(a['name'] for a in t['artists']),
-                'Spotify Track Id': t['id'],
-                'Popularity':       t['popularity'],
-                'Preview URL':      t.get('preview_url'),
-                'Spotify URL':      t['external_urls']['spotify'],
-            })
+    X_new  = df_new[FEATURES].values
+    sims   = cosine_similarity(X_new, ideal_raw).flatten()
+    df_new['match_score'] = (sims * 100).round(1)
 
-        return pd.DataFrame(rows) if rows else None
-
-    except Exception as e:
-        return str(e)  # return error string so we can display it
+    return df_new.nlargest(n, 'match_score')[
+        ['Song', 'Artist', 'match_score', 'Energy', 'Valence',
+         'Dance', 'Spotify Track Id']
+    ]
 
 def push_playlist_web(access_token, full_name, description, track_ids):
     sp  = spotipy.Spotify(auth=access_token)
@@ -987,32 +975,45 @@ with tab3:
     st.dataframe(out, hide_index=True, use_container_width=True)
 
 with tab4:
-    st.subheader('Songs you might like')
-    st.caption('Based on your top 5 best-fit songs as seeds — not already in your library.')
+    st.subheader('Find songs you might like')
+    st.caption(
+        'Upload any other playlist CSV — a friend\'s playlist, '
+        'a curated Spotify playlist, anything. The app will score '
+        'every song against your taste and surface the best matches.'
+    )
 
-    if 'spotify_token' not in st.session_state:
-        st.info('Connect Spotify in the sidebar to get recommendations.')
-    else:
-        if st.button('Find new songs for me', type='primary'):
-            with st.spinner('Asking Spotify for recommendations...'):
-                recs = get_new_recommendations(
-                    st.session_state['spotify_token'], df
-                )
+    discover_file = st.file_uploader(
+        'Upload a discovery playlist CSV', type='csv', key='discover'
+    )
 
-            if recs is None:
-                st.warning('No recommendations returned — try a different playlist.')
-            elif isinstance(recs, str):
-                st.error(f'Spotify API error: {recs}')
-                st.caption('Note: Spotify deprecated the recommendations endpoint '
-                           'for some apps. This feature may not be available.')
-            else:
-                st.success(f'Found {len(recs)} songs you might like!')
-                for _, row in recs.iterrows():
-                    col1, col2, col3 = st.columns([4, 1, 1])
-                    col1.write(f"**{row['Song']}** — {row['Artist']}")
-                    col2.markdown(f"[Open]({row['Spotify URL']})")
-                    if row['Preview URL'] and col3.button('▶ Play', key=f"rec_{row['Spotify Track Id']}"):
-                        st.audio(row['Preview URL'], format='audio/mp3')
+    if discover_file:
+        disc_bytes        = discover_file.read()
+        df_disc, disc_name = load_csv(disc_bytes, discover_file.name)
+        df_disc, _, _, _   = build_features(df_disc)
+
+        st.caption(f'Scoring {len(df_disc)} songs from "{disc_name}" '
+                   f'against your taste...')
+
+        recs = get_recommendations_from_csv(df, df_disc, scaler)
+
+        if recs is None or recs.empty:
+            st.warning('No new songs found — all songs may already be in your library.')
+        else:
+            st.success(f'Top {len(recs)} matches from "{disc_name}":')
+            st.dataframe(recs, hide_index=True, use_container_width=True)
+
+            # Option to push these as a playlist
+            if 'spotify_token' in st.session_state:
+                if st.button('Push these to Spotify', type='primary'):
+                    track_ids = recs['Spotify Track Id'].tolist()
+                    with st.spinner('Creating playlist...'):
+                        url = push_playlist_web(
+                            st.session_state['spotify_token'],
+                            f'discovered from {disc_name} (from {pname})',
+                            f'Songs from {disc_name} matched to {pname} taste',
+                            track_ids
+                        )
+                    st.success(f'Created! [Open playlist]({url})')
 
 with tab5:
     st.subheader('Generated playlists')
