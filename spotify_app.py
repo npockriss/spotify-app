@@ -637,6 +637,16 @@ with st.sidebar:
     st.divider()
     st.subheader('Spotify Connection')
     st.caption('Only needed to push playlists to Spotify.')
+    with st.expander('How to get your Spotify credentials'):
+        st.markdown("""
+        1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and log in
+        2. Click **Create app**, name it anything
+        3. Under **Redirect URIs** add exactly:
+        """)
+        st.code('https://spotify-app-onnyqzrqbzkqxnrpkdnxlg.streamlit.app/')
+        st.markdown("""
+        4. Copy your **Client ID** and **Client Secret** into the boxes below
+        """)
 
     client_id     = st.text_input('Client ID',     type='password')
     client_secret = st.text_input('Client Secret', type='password')
@@ -651,7 +661,6 @@ with st.sidebar:
         if client_id and client_secret:
 
             auth_url = get_auth_url(client_id, REDIRECT_URI)
-            st.code(auth_url)
             st.markdown(f'**Step 1:** [Click here to log in to Spotify]({auth_url})')
             st.caption(
                 'After clicking, Spotify will redirect you to a page that '
