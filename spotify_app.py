@@ -954,24 +954,28 @@ c4.metric('Avg Valence',  f'{df["Valence"].mean():.0f}')
 c5.metric('Avg BPM',      f'{df["BPM"].mean():.0f}')
 
 # ── Library cohesion blurb ────────────────────────────────
-overall_sim    = cosine_similarity(X_raw)
-n_all          = len(X_raw)
-upper_all      = overall_sim[np.triu_indices(n_all, k=1)]
-st.caption(f'debug: cohesion = {overall_cohesion:.4f}')
-overall_cohesion = float(upper_all.mean())
+try:
+    sample_idx       = np.random.choice(len(X_raw), min(500, len(X_raw)), replace=False)
+    sample_raw       = X_raw[sample_idx]
+    overall_sim      = cosine_similarity(sample_raw)
+    n_all            = len(sample_raw)
+    upper_all        = overall_sim[np.triu_indices(n_all, k=1)]
+    overall_cohesion = float(upper_all.mean())
 
-if overall_cohesion > 0.95:
-    cohesion_blurb = f"**Your library is extremely tight** — almost every song points in the same sonic direction. Great for auto-playlists, but you might not have much variety."
-elif overall_cohesion > 0.92:
-    cohesion_blurb = f"**Your library is pretty cohesive** — a clear core taste with some range. The auto-playlists will work well."
-elif overall_cohesion > 0.88:
-    cohesion_blurb = f"**Your library has decent variety** — a recognizable taste with enough range to make distinct mood playlists."
-elif overall_cohesion > 0.83:
-    cohesion_blurb = f"**Your library is pretty eclectic** — lots of different sounds in here. The clusters will be interesting."
-else:
-    cohesion_blurb = f"**Your library is all over the place** — in the best way. Expect lots of distinct clusters and varied auto-playlists."
+    if overall_cohesion > 0.95:
+        cohesion_blurb = "**Extremely tight library** — almost every song points in the same sonic direction. Great for focused playlists, not much variety."
+    elif overall_cohesion > 0.92:
+        cohesion_blurb = "**Pretty cohesive library** — a clear core taste with some range. Auto-playlists will work well."
+    elif overall_cohesion > 0.88:
+        cohesion_blurb = "**Decent variety** — a recognizable taste with enough range to make distinct mood playlists."
+    elif overall_cohesion > 0.83:
+        cohesion_blurb = "**Pretty eclectic library** — lots of different sounds in here. Expect interesting clusters."
+    else:
+        cohesion_blurb = "**All over the place** — in the best way. Expect lots of distinct clusters and varied auto-playlists."
 
-st.info(f'{cohesion_blurb} *(library cohesion: {overall_cohesion:.2f})*')
+    st.info(f'{cohesion_blurb} *(library cohesion: {overall_cohesion:.2f})*')
+except Exception:
+    pass  # silently skip if cohesion can't be computed
 
 # ── Mood report card ──────────────────────────────────────
 report = mood_report(df)
