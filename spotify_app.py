@@ -1011,9 +1011,9 @@ if report:
                   delta=f'{ac_delta:+.0f} vs overall')
 
 # ── Tabs ──────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
     ['🔮 Clusters', '📈 Taste Over Time', '⭐ Recommender',
-     '🔍 Discover', '🎛️ Playlists', '📊 Raw Data']
+     '🔍 Discover', '🎛️ Playlists', '🎚️ Build Your Own', '📊 Raw Data']
 )
 
 with tab1:
@@ -1253,6 +1253,137 @@ with tab5:
                 st.dataframe(sample, hide_index=True, use_container_width=True)
 
 with tab6:
+    st.subheader('Build your own playlist')
+    st.caption('Set the vibe you want — the app finds every song in your library that fits.')
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown('**Energy**')
+        energy_range = st.slider('', 0, 100, (40, 70), key='energy_range',
+                                  label_visibility='collapsed')
+
+    with col2:
+        st.markdown('**Valence (mood)**')
+        valence_range = st.slider('', 0, 100, (50, 100), key='valence_range',
+                                   label_visibility='collapsed')
+
+    with col3:
+        st.markdown('**Acousticness**')
+        acoustic_range = st.slider('', 0, 100, (0, 40), key='acoustic_range',
+                                    label_visibility='collapsed')
+
+    # Optional secondary filters in an expander
+    with st.expander('More filters (optional)'):
+        col4, col5, col6 = st.columns(3)
+        with col4:
+            bpm_range = st.slider('BPM', 60, 200, (60, 200), key='bpm_range')
+        with col5:
+            dance_range = st.slider('Danceability', 0, 100, (0, 100), key='dance_range')
+        with col6:
+            speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='speech_range')
+
+    # Apply filters
+    mask = (
+        df['Energy'].between(*energy_range) &
+        df['Valence'].between(*valence_range) &
+        df['Acoustic'].between(*acoustic_range) &
+        df['BPM'].between(*bpm_range) &
+        df['Dance'].between(*dance_range) &
+        df['Speech'].between(*speech_range)
+    )
+
+    matched = df[mask].copy()
+    n_matched = len(matched)
+
+    # Show a live description of what they're building
+    def describe_vibe(e, v, ac):
+        e_word  = 'high energy' if e[0] > 60 else 'low energy' if e[1] < 40 else 'mid energy'
+        v_word  = 'happy' if v[0] > 60 else 'sad' if v[1] < 40 else 'neutral mood'
+        ac_word = 'acoustic' if ac[0] > 50 else 'produced' if ac[1] < 30 else 'mixed acoustic'
+        return f'{e_word} · {v_word} · {ac_word}'
+
+    vibe_desc = describe_vibe(energy_range, valence_range, acoustic_range)
+
+    st.divider()
+
+    if n_matched == 0:
+        st.warning('No songs match these filters — try widening the ranges.')
+    else:
+        st.markdown(f'**{n_matched} songs matched** — *{vibe_desc}*')
+
+        # Quality metrics for this custom playlist
+        idx           = np.where(mask)[0]
+        subset_raw    = X_raw[idx]
+        sim_matrix    = cosine_similarity(subset_raw)
+        n             = len(idx)
+        upper         = sim_matrix[np.triu_indices(n, k=1)]
+        cohesion      = round(float(upper.mean()), 3)
+        overall_std   = pd.DataFrame(X_scaled, columns=FEATURES).std()
+        subset_scaled = X_scaled[idx]
+        subset_std    = pd.DataFrame(subset_scaled, columns=FEATURES).std()
+        relative_var  = (subset_std / overall_std).mean()
+        tightness     = round((1 - relative_var) * 100, 1)
+
+        mc1, mc2 = st.columns(2)
+        mc1.metric('Cohesion',  cohesion,
+                   help='How similar the songs sound to each other (0-1)')
+        mc2.metric('Tightness', f'{tightness}',
+                   help='How consistent across all features (0-100)')
+
+        # Show matched songs sorted by rec_score
+        display = matched.nlargest(min(n_matched, 200), 'rec_score')[
+            ['Song', 'Artist', 'Energy', 'Valence', 'Acoustic',
+             'Dance', 'BPM', 'rec_score', 'cluster_name']
+        ]
+        st.dataframe(display, hide_index=True, use_container_width=True)
+
+        # Playlist name input + push
+        st.divider()
+        playlist_name_input = st.text_input(
+            'Playlist name',
+            value=vibe_desc,
+            placeholder='Name your playlist...'
+        )
+
+        col_push, col_dl = st.columns([1, 1])
+
+        # Download as CSV
+        with col_dl:
+            csv_out = matched[['Song', 'Artist', 'Spotify Track Id']].to_csv(index=False)
+            st.download_button(
+                'Download song list',
+                csv_out,
+                file_name=f'{playlist_name_input}.csv',
+                mime='text/csv',
+                use_container_width=True,
+            )
+
+        # Push to Spotify
+        with col_push:
+            if 'spotify_token' not in st.session_state:
+                st.button('Push to Spotify', disabled=True,
+                          use_container_width=True,
+                          help='Connect Spotify in the sidebar first')
+            else:
+                if st.button('Push to Spotify', type='primary',
+                             use_container_width=True):
+                    track_ids = matched['Spotify Track Id'].tolist()
+                    with st.spinner('Creating playlist...'):
+                        try:
+                            url = push_playlist_web(
+                                st.session_state['spotify_token'],
+                                f'{playlist_name_input} (from {pname})',
+                                f'{vibe_desc} · {n_matched} songs · built with playlist-analyzer.streamlit.app',
+                                track_ids
+                            )
+                            st.success(f'Created! [{playlist_name_input}]({url})')
+                        except Exception as e:
+                            st.error(f'Error: {e}')
+
+
+
+with tab7:
     st.subheader('Full dataset')
     display_cols = ['Song','Artist','cluster_name','rec_score',
                     'Energy','Valence','Dance','Acoustic','BPM','Popularity']
