@@ -1340,54 +1340,30 @@ with tab6:
     with slider_col:
         st.markdown('**Energy**')
         energy_range = st.slider('', 0, 100,
-                          st.session_state['byo_energy'],
-                          key='byo_energy_slider',
-                          label_visibility='collapsed')
+                                  st.session_state['byo_energy'],
+                                  key='byo_energy_slider',
+                                  label_visibility='collapsed')
 
+        st.markdown('**Valence (mood)**')
         valence_range = st.slider('', 0, 100,
-                           st.session_state['byo_valence'],
-                           key='byo_valence_slider',
-                           label_visibility='collapsed')
+                                   st.session_state['byo_valence'],
+                                   key='byo_valence_slider',
+                                   label_visibility='collapsed')
 
+        st.markdown('**Acousticness**')
         acoustic_range = st.slider('', 0, 100,
-                            st.session_state['byo_acoustic'],
-                            key='byo_acoustic_slider',
-                            label_visibility='collapsed')
+                                    st.session_state['byo_acoustic'],
+                                    key='byo_acoustic_slider',
+                                    label_visibility='collapsed')
 
         with st.expander('More filters (optional)'):
             col4, col5, col6 = st.columns(3)
             with col4:
-                bpm_range = st.slider('BPM', 60, 200, (60, 200), key='bpm_range')
+                bpm_range = st.slider('BPM', 60, 200, (60, 200), key='byo_bpm_range')
             with col5:
-                dance_range = st.slider('Danceability', 0, 100, (0, 100), key='dance_range')
+                dance_range = st.slider('Danceability', 0, 100, (0, 100), key='byo_dance_range')
             with col6:
-                speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='speech_range')
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown('**Energy**')
-        energy_range = st.slider('', 0, 100, (40, 70), key='energy_range',
-                                  label_visibility='collapsed')
-
-    with col2:
-        st.markdown('**Valence (mood)**')
-        valence_range = st.slider('', 0, 100, (50, 100), key='valence_range',
-                                   label_visibility='collapsed')
-
-    with col3:
-        st.markdown('**Acousticness**')
-        acoustic_range = st.slider('', 0, 100, (0, 40), key='acoustic_range',
-                                    label_visibility='collapsed')
-
-    # Optional secondary filters in an expander
-    with st.expander('More filters (optional)'):
-        col4, col5, col6 = st.columns(3)
-        with col4:
-            bpm_range = st.slider('BPM', 60, 200, (60, 200), key='bpm_range')
-        with col5:
-            dance_range = st.slider('Danceability', 0, 100, (0, 100), key='dance_range')
-        with col6:
-            speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='speech_range')
+                speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='byo_speech_range')
 
     # Apply filters
     mask = (
