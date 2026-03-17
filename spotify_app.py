@@ -1250,7 +1250,9 @@ with tab5:
             progress = st.progress(0)
             results  = []
             for i, pl in enumerate(selected_defs):
-                track_ids = df[pl['mask']]['Spotify Track Id'].tolist()
+                track_ids = (df[pl['mask']]
+                       .sort_values('rec_score', ascending=False)['Spotify Track Id']
+                       .tolist())
                 if not track_ids:
                     st.warning(f'No songs matched for {pl["full_name"]} — skipping.')
                     continue
@@ -1489,7 +1491,7 @@ with tab6:
             else:
                 if st.button('Push to Spotify', type='primary',
                              use_container_width=True):
-                    track_ids = matched['Spotify Track Id'].tolist()
+                    track_ids = matched.sort_values('rec_score', ascending=False)['Spotify Track Id'].tolist()
                     with st.spinner('Creating playlist...'):
                         try:
                             url = push_playlist_web(
