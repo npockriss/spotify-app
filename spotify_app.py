@@ -1462,7 +1462,7 @@ with tab6:
                             url = push_playlist_web(
                                 st.session_state['spotify_token'],
                                 playlist_name_input,
-                                f'{vibe_desc} · {n_matched} songs · built with playlist-analyzer.streamlit.app',
+                                f'{vibe_desc} · {n_matched} songs · from {pname} · playlist-analyzer.streamlit.app',
                                 track_ids
                             )
                             st.success(f'Created! [{playlist_name_input}]({url})')
