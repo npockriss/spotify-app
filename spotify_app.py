@@ -1340,21 +1340,19 @@ with tab6:
     with slider_col:
         st.markdown('**Energy**')
         energy_range = st.slider('', 0, 100,
-                                  st.session_state['byo_energy'],
-                                  key='energy_range',
-                                  label_visibility='collapsed')
+                          st.session_state['byo_energy'],
+                          key='byo_energy_slider',
+                          label_visibility='collapsed')
 
-        st.markdown('**Valence (mood)**')
         valence_range = st.slider('', 0, 100,
-                                   st.session_state['byo_valence'],
-                                   key='valence_range',
-                                   label_visibility='collapsed')
+                           st.session_state['byo_valence'],
+                           key='byo_valence_slider',
+                           label_visibility='collapsed')
 
-        st.markdown('**Acousticness**')
         acoustic_range = st.slider('', 0, 100,
-                                    st.session_state['byo_acoustic'],
-                                    key='acoustic_range',
-                                    label_visibility='collapsed')
+                            st.session_state['byo_acoustic'],
+                            key='byo_acoustic_slider',
+                            label_visibility='collapsed')
 
         with st.expander('More filters (optional)'):
             col4, col5, col6 = st.columns(3)
