@@ -1257,9 +1257,10 @@ with tab6:
     st.caption('Set the vibe you want — the app finds every song in your library that fits.')
 
     # Initialize slider values in session state
-    if 'byo_energy'   not in st.session_state: st.session_state['byo_energy']   = (40, 70)
-    if 'byo_valence'  not in st.session_state: st.session_state['byo_valence']  = (50, 100)
-    if 'byo_acoustic' not in st.session_state: st.session_state['byo_acoustic'] = (0, 40)
+    if 'byo_energy'       not in st.session_state: st.session_state['byo_energy']       = (40, 70)
+    if 'byo_valence'      not in st.session_state: st.session_state['byo_valence']      = (50, 100)
+    if 'byo_acoustic'     not in st.session_state: st.session_state['byo_acoustic']     = (0, 40)
+    if 'byo_preset_label' not in st.session_state: st.session_state['byo_preset_label'] = ''
 
     # Presets
     PRESETS = [
@@ -1332,9 +1333,10 @@ with tab6:
         st.caption('Click one to load suggested ranges — then fine-tune with the sliders.')
         for preset in PRESETS:
             if st.button(preset['label'], use_container_width=True, key=f"preset_{preset['label']}"):
-                st.session_state['byo_energy']   = preset['energy']
-                st.session_state['byo_valence']  = preset['valence']
-                st.session_state['byo_acoustic'] = preset['acoustic']
+                st.session_state['byo_energy']       = preset['energy']
+                st.session_state['byo_valence']      = preset['valence']
+                st.session_state['byo_acoustic']     = preset['acoustic']
+                st.session_state['byo_preset_label'] = preset['label']
                 st.rerun()
 
     with slider_col:
@@ -1422,9 +1424,10 @@ with tab6:
 
         # Playlist name input + push
         st.divider()
+        default_name = st.session_state.get('byo_preset_label') or vibe_desc
         playlist_name_input = st.text_input(
             'Playlist name',
-            value=vibe_desc,
+            value=default_name,
             placeholder='Name your playlist...'
         )
 
