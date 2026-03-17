@@ -1430,10 +1430,12 @@ with tab6:
 
         # Playlist name input + push
         st.divider()
+        default_name = st.session_state.get('byo_preset_label') or vibe_desc
         playlist_name_input = st.text_input(
             'Playlist name',
-            value=vibe_desc,
-            placeholder='Name your playlist...'
+            value=default_name,
+        placeholder='Name your playlist...',
+        key=f'playlist_name_{st.session_state.get("byo_preset_label", "default")}'
         )
 
         col_push, col_dl = st.columns([1, 1])
