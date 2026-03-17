@@ -1256,6 +1256,114 @@ with tab6:
     st.subheader('Build your own playlist')
     st.caption('Set the vibe you want — the app finds every song in your library that fits.')
 
+    # Initialize slider values in session state
+    if 'byo_energy'   not in st.session_state: st.session_state['byo_energy']   = (40, 70)
+    if 'byo_valence'  not in st.session_state: st.session_state['byo_valence']  = (50, 100)
+    if 'byo_acoustic' not in st.session_state: st.session_state['byo_acoustic'] = (0, 40)
+
+    # Presets
+    PRESETS = [
+        {
+            'label':   'aux at a rager',
+            'energy':  (75, 100),
+            'valence': (55, 100),
+            'acoustic':(0, 25),
+        },
+        {
+            'label':   'hanging out in your room',
+            'energy':  (20, 55),
+            'valence': (35, 70),
+            'acoustic':(40, 100),
+        },
+        {
+            'label':   'studying',
+            'energy':  (15, 50),
+            'valence': (30, 65),
+            'acoustic':(35, 100),
+        },
+        {
+            'label':   'sunday morning',
+            'energy':  (10, 45),
+            'valence': (55, 100),
+            'acoustic':(45, 100),
+        },
+        {
+            'label':   'working out',
+            'energy':  (70, 100),
+            'valence': (40, 100),
+            'acoustic':(0, 30),
+        },
+        {
+            'label':   'dinner party',
+            'energy':  (35, 65),
+            'valence': (55, 100),
+            'acoustic':(20, 65),
+        },
+        {
+            'label':   '2am can\'t sleep',
+            'energy':  (0, 40),
+            'valence': (0, 40),
+            'acoustic':(30, 100),
+        },
+        {
+            'label':   'late night drive',
+            'energy':  (50, 80),
+            'valence': (20, 55),
+            'acoustic':(0, 35),
+        },
+        {
+            'label':   'just got dumped',
+            'energy':  (0, 45),
+            'valence': (0, 35),
+            'acoustic':(35, 100),
+        },
+        {
+            'label':   'getting ready to go out',
+            'energy':  (65, 100),
+            'valence': (60, 100),
+            'acoustic':(0, 25),
+        },
+    ]
+
+    preset_col, slider_col = st.columns([1, 2])
+
+    with preset_col:
+        st.markdown('**Presets**')
+        st.caption('Click one to load suggested ranges — then fine-tune with the sliders.')
+        for preset in PRESETS:
+            if st.button(preset['label'], use_container_width=True, key=f"preset_{preset['label']}"):
+                st.session_state['byo_energy']   = preset['energy']
+                st.session_state['byo_valence']  = preset['valence']
+                st.session_state['byo_acoustic'] = preset['acoustic']
+                st.rerun()
+
+    with slider_col:
+        st.markdown('**Energy**')
+        energy_range = st.slider('', 0, 100,
+                                  st.session_state['byo_energy'],
+                                  key='energy_range',
+                                  label_visibility='collapsed')
+
+        st.markdown('**Valence (mood)**')
+        valence_range = st.slider('', 0, 100,
+                                   st.session_state['byo_valence'],
+                                   key='valence_range',
+                                   label_visibility='collapsed')
+
+        st.markdown('**Acousticness**')
+        acoustic_range = st.slider('', 0, 100,
+                                    st.session_state['byo_acoustic'],
+                                    key='acoustic_range',
+                                    label_visibility='collapsed')
+
+        with st.expander('More filters (optional)'):
+            col4, col5, col6 = st.columns(3)
+            with col4:
+                bpm_range = st.slider('BPM', 60, 200, (60, 200), key='bpm_range')
+            with col5:
+                dance_range = st.slider('Danceability', 0, 100, (0, 100), key='dance_range')
+            with col6:
+                speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='speech_range')
     col1, col2, col3 = st.columns(3)
 
     with col1:
