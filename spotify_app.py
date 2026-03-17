@@ -1401,17 +1401,30 @@ with tab6:
         with col6:
             speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='byo_speech_range')
 
-    if focus == 'Focused':
-        energy_range   = tighten(energy_range,   0.75)
-        valence_range  = tighten(valence_range,  0.75)
-        acoustic_range = tighten(acoustic_range, 0.75)
-    elif focus == 'Broad':
-        energy_range   = tighten(energy_range,   1.25)
-        valence_range  = tighten(valence_range,  1.25)
-        acoustic_range = tighten(acoustic_range, 1.25)
-    # Balanced = no change
+    if focus != 'Balanced':
+        # Count songs at current ranges before adjusting
+        balanced_count = int((
+            df['Energy'].between(*energy_range) &
+            df['Valence'].between(*valence_range) &
+            df['Acoustic'].between(*acoustic_range)
+        ).sum())
 
-    # Apply filters
+        # Scale factor based on how many songs already match
+        if focus == 'Focused':
+            if balanced_count > 200:   factor = 0.75
+            elif balanced_count > 100: factor = 0.82
+            elif balanced_count > 50:  factor = 0.88
+            else:                      factor = 0.94
+        else:  # Broad
+            if balanced_count > 200:   factor = 1.25
+            elif balanced_count > 100: factor = 1.18
+            elif balanced_count > 50:  factor = 1.12
+            else:                      factor = 1.06
+
+        energy_range   = tighten(energy_range,   factor)
+        valence_range  = tighten(valence_range,  factor)
+        acoustic_range = tighten(acoustic_range, factor)
+    # Balanced = no change
 
     # Apply filters
     mask = (
