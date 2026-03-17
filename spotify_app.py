@@ -955,27 +955,29 @@ c5.metric('Avg BPM',      f'{df["BPM"].mean():.0f}')
 
 # ── Library cohesion blurb ────────────────────────────────
 try:
-    sample_idx       = np.random.choice(len(X_raw), min(500, len(X_raw)), replace=False)
-    sample_raw       = X_raw[sample_idx]
-    overall_sim      = cosine_similarity(sample_raw)
-    n_all            = len(sample_raw)
-    upper_all        = overall_sim[np.triu_indices(n_all, k=1)]
-    overall_cohesion = float(upper_all.mean())
+    # Mean std across all features — low = tight, high = eclectic
+    feature_stds  = pd.DataFrame(X_raw, columns=FEATURES).std()
+    avg_std        = float(feature_stds.mean())
 
-    if overall_cohesion > 0.95:
-        cohesion_blurb = "**Extremely tight library** — almost every song points in the same sonic direction. Great for focused playlists, not much variety."
-    elif overall_cohesion > 0.92:
-        cohesion_blurb = "**Pretty cohesive library** — a clear core taste with some range. Auto-playlists will work well."
-    elif overall_cohesion > 0.88:
-        cohesion_blurb = "**Decent variety** — a recognizable taste with enough range to make distinct mood playlists."
-    elif overall_cohesion > 0.83:
-        cohesion_blurb = "**Pretty eclectic library** — lots of different sounds in here. Expect interesting clusters."
+    # X_raw is 0-100 scale; typical range for avg_std:
+    # tight single-genre playlist: ~10-18
+    # focused multi-genre: ~18-24
+    # eclectic large library: ~24-32
+
+    if avg_std < 15:
+        cohesion_blurb = "**Extremely consistent library** — your songs are all in the same sonic lane. Very tight taste."
+    elif avg_std < 20:
+        cohesion_blurb = "**Pretty tight library** — a clear core sound with some variation. Auto-playlists will be focused."
+    elif avg_std < 25:
+        cohesion_blurb = "**Decent variety** — recognizable taste but room for distinct moods."
+    elif avg_std < 30:
+        cohesion_blurb = "**Pretty eclectic** — lots of different sounds. Expect interesting clusters."
     else:
-        cohesion_blurb = "**All over the place** — in the best way. Expect lots of distinct clusters and varied auto-playlists."
+        cohesion_blurb = "**All over the place** — in the best way. Wide range of sounds, lots of distinct clusters."
 
-    st.info(f'{cohesion_blurb} *(library cohesion: {overall_cohesion:.2f})*')
+    st.info(f'{cohesion_blurb} *(feature spread: {avg_std:.1f})*')
 except Exception:
-    pass  # silently skip if cohesion can't be computed
+    pass
 
 # ── Mood report card ──────────────────────────────────────
 report = mood_report(df)
