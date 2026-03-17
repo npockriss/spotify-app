@@ -949,6 +949,25 @@ c3.metric('Avg Energy',   f'{df["Energy"].mean():.0f}')
 c4.metric('Avg Valence',  f'{df["Valence"].mean():.0f}')
 c5.metric('Avg BPM',      f'{df["BPM"].mean():.0f}')
 
+# ── Library cohesion blurb ────────────────────────────────
+overall_sim    = cosine_similarity(X_raw)
+n_all          = len(X_raw)
+upper_all      = overall_sim[np.triu_indices(n_all, k=1)]
+overall_cohesion = float(upper_all.mean())
+
+if overall_cohesion > 0.95:
+    cohesion_blurb = f"**Your library is extremely tight** — almost every song points in the same sonic direction. Great for auto-playlists, but you might not have much variety."
+elif overall_cohesion > 0.92:
+    cohesion_blurb = f"**Your library is pretty cohesive** — a clear core taste with some range. The auto-playlists will work well."
+elif overall_cohesion > 0.88:
+    cohesion_blurb = f"**Your library has decent variety** — a recognizable taste with enough range to make distinct mood playlists."
+elif overall_cohesion > 0.83:
+    cohesion_blurb = f"**Your library is pretty eclectic** — lots of different sounds in here. The clusters will be interesting."
+else:
+    cohesion_blurb = f"**Your library is all over the place** — in the best way. Expect lots of distinct clusters and varied auto-playlists."
+
+st.info(f'{cohesion_blurb} *(library cohesion: {overall_cohesion:.2f})*')
+
 # ── Mood report card ──────────────────────────────────────
 report = mood_report(df)
 if report:
