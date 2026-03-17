@@ -117,7 +117,7 @@ def load_csv(file_bytes, filename):
     df['Added At']   = pd.to_datetime(df['Added At'],   errors='coerce')
     df['Album Date'] = pd.to_datetime(df['Album Date'], errors='coerce')
 
-    playlist_name = filename.replace('.csv', '')
+    playlist_name = filename.replace('.csv', '').replace('_', ' ').strip()
     return df, playlist_name
 
 
