@@ -529,7 +529,7 @@ def get_auth_url(client_id, client_secret, redirect_uri):
         'client_id':     client_id,
         'response_type': 'code',
         'redirect_uri':  redirect_uri,
-        'scope':         'playlist-modify-private playlist-modify-public',
+        'scope':         'playlist-modify-private playlist-modify-public ugc-image-upload',
         'state':         state,
     }
     return 'https://accounts.spotify.com/authorize?' + urllib.parse.urlencode(params)
@@ -569,18 +569,305 @@ def get_recommendations_from_csv(df_main, df_discover, scaler, n=20):
         ['Song', 'Artist', 'match_score', 'Energy', 'Valence',
          'Dance', 'Spotify Track Id']
     ]
+def generate_playlist_art(playlist_name, avg_energy, avg_valence, avg_acoustic, avg_bpm):
+    """
+    Generate abstract playlist cover art based on audio features.
+    Returns a base64-encoded JPEG string ready for Spotify's API.
+    
+    - Valence  → color palette (warm=happy, cool=sad, teal=neutral)
+    - Energy   → shape style (sharp/angular vs soft/rounded)
+    - Acoustic → texture (grainy=acoustic, clean=produced)
+    - BPM      → density (how many shapes)
+    """
+    from PIL import Image, ImageDraw, ImageFilter
+    import random, math, io, base64
 
-def push_playlist_web(access_token, full_name, description, track_ids):
+    SIZE = 300
+
+    # Seed with playlist name so same playlist = same image every time
+    seed = int(hashlib.md5(playlist_name.encode()).hexdigest(), 16) % (2**32)
+    rng  = random.Random(seed)
+
+    # ── 1. Pick color palette from valence ────────────────
+    # Each palette has: background, primary, secondary, accent
+    if avg_valence > 62:        # happy / warm
+        palettes = [
+            ['#1a0a00', '#ff6b2b', '#ffb347', '#ffe066'],  # ember
+            ['#0d0a00', '#f7c948', '#ff8c42', '#fff0a0'],  # golden
+            ['#1a0d0d', '#ff4e6a', '#ff9a3c', '#ffd166'],  # sunset
+        ]
+    elif avg_valence < 38:      # sad / cool
+        palettes = [
+            ['#00060f', '#1a3a6b', '#2d6fa8', '#7ab8d4'],  # deep ocean
+            ['#080010', '#2e1065', '#6d28d9', '#a78bfa'],  # midnight purple
+            ['#000a0a', '#0f3d3d', '#1a7a6e', '#4ecdc4'],  # deep teal
+        ]
+    else:                       # neutral / mid
+        palettes = [
+            ['#000d0a', '#0d4a3a', '#1a8a5a', '#52d68a'],  # forest
+            ['#050010', '#1a1a4a', '#2d4a8a', '#5b8adb'],  # indigo
+            ['#0a0508', '#3d1a3d', '#7a2d7a', '#c45bc4'],  # plum
+        ]
+
+    palette_idx = rng.randint(0, len(palettes) - 1)
+    bg_col, primary, secondary, accent = palettes[palette_idx]
+
+    def hex_to_rgb(h):
+        h = h.lstrip('#')
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+    bg_rgb  = hex_to_rgb(bg_col)
+    p_rgb   = hex_to_rgb(primary)
+    s_rgb   = hex_to_rgb(secondary)
+    a_rgb   = hex_to_rgb(accent)
+
+    img  = Image.new('RGB', (SIZE, SIZE), bg_rgb)
+    draw = ImageDraw.Draw(img)
+
+    # ── 2. Background gradient wash ───────────────────────
+    for y in range(SIZE):
+        t   = y / SIZE
+        r   = int(bg_rgb[0] + (p_rgb[0] - bg_rgb[0]) * t * 0.4)
+        g   = int(bg_rgb[1] + (p_rgb[1] - bg_rgb[1]) * t * 0.4)
+        b   = int(bg_rgb[2] + (p_rgb[2] - bg_rgb[2]) * t * 0.4)
+        draw.line([(0, y), (SIZE, y)], fill=(r, g, b))
+
+    # ── 3. Number of shapes from BPM ──────────────────────
+    n_shapes = int(rng.uniform(6, 10) + (avg_bpm - 80) / 40)
+    n_shapes = max(4, min(16, n_shapes))
+
+    # ── 4. Draw shapes based on energy ───────────────────
+    # High energy → sharp polygons. Low energy → circles/ellipses.
+    energy_norm  = avg_energy / 100      # 0-1
+    angular_prob = energy_norm           # higher energy = more angular shapes
+
+    for _ in range(n_shapes):
+        cx = rng.randint(20, SIZE - 20)
+        cy = rng.randint(20, SIZE - 20)
+        sz = rng.randint(20, 90)
+
+        # Pick color — mix between primary, secondary, accent
+        col_choice = rng.random()
+        if col_choice < 0.5:
+            col = p_rgb
+        elif col_choice < 0.8:
+            col = s_rgb
+        else:
+            col = a_rgb
+
+        # Add slight random brightness variation
+        brightness = rng.uniform(0.6, 1.1)
+        col = tuple(min(255, int(c * brightness)) for c in col)
+
+        alpha = rng.randint(60, 160)
+        col_with_alpha = col + (alpha,)
+
+        # Overlay layer for alpha blending
+        overlay = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
+        odraw   = ImageDraw.Draw(overlay)
+
+        if rng.random() < angular_prob:
+            # Angular shape — polygon with 3-6 points
+            n_pts  = rng.randint(3, 6)
+            points = []
+            for i in range(n_pts):
+                angle     = (2 * math.pi * i / n_pts) + rng.uniform(-0.4, 0.4)
+                radius    = sz * rng.uniform(0.5, 1.0)
+                px_       = cx + int(radius * math.cos(angle))
+                py_       = cy + int(radius * math.sin(angle))
+                points.append((px_, py_))
+            odraw.polygon(points, fill=col_with_alpha)
+        else:
+            # Soft shape — ellipse, possibly rotated
+            rx = sz
+            ry = int(sz * rng.uniform(0.4, 1.0))
+            odraw.ellipse([cx - rx, cy - ry, cx + rx, cy + ry],
+                          fill=col_with_alpha)
+
+        img = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+        draw = ImageDraw.Draw(img)
+
+    # ── 5. Accent lines for high-energy playlists ────────
+    if avg_energy > 65:
+        n_lines = int((avg_energy - 65) / 10) + rng.randint(1, 3)
+        for _ in range(n_lines):
+            x1 = rng.randint(0, SIZE)
+            y1 = rng.randint(0, SIZE)
+            x2 = rng.randint(0, SIZE)
+            y2 = rng.randint(0, SIZE)
+            width = rng.randint(1, 3)
+            draw.line([(x1, y1), (x2, y2)],
+                      fill=a_rgb + (rng.randint(80, 180),), width=width)
+
+    # ── 6. Grain texture for acoustic playlists ──────────
+    if avg_acoustic > 40:
+        grain_strength = int((avg_acoustic - 40) / 60 * 30)
+        pixels = img.load()
+        for gx in range(0, SIZE, 2):
+            for gy in range(0, SIZE, 2):
+                if rng.random() < 0.3:
+                    noise = rng.randint(-grain_strength, grain_strength)
+                    r, g, b = pixels[gx, gy]
+                    pixels[gx, gy] = (
+                        max(0, min(255, r + noise)),
+                        max(0, min(255, g + noise)),
+                        max(0, min(255, b + noise)),
+                    )
+
+    # ── 7. Soft blur for low-energy playlists ────────────
+    if avg_energy < 40:
+        img = img.filter(ImageFilter.GaussianBlur(radius=1.2))
+
+    # ── 8. Encode to base64 JPEG for Spotify ─────────────
+    buffer = io.BytesIO()
+    img.save(buffer, format='JPEG', quality=85)
+    return base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+
+def generate_playlist_art(playlist_name, avg_energy, avg_valence, avg_acoustic, avg_bpm):
+    """
+    Generate abstract cover art based on audio features.
+    Valence → colors, Energy → shape style, Acoustic → grain, BPM → density.
+    """
+    from PIL import Image, ImageDraw, ImageFilter
+    import random, math, io
+
+    SIZE = 300
+    seed = int(hashlib.md5(playlist_name.encode()).hexdigest(), 16) % (2**32)
+    rng  = random.Random(seed)
+
+    # Color palette from valence
+    if avg_valence > 62:
+        palettes = [
+            ['#1a0a00', '#ff6b2b', '#ffb347', '#ffe066'],
+            ['#0d0a00', '#f7c948', '#ff8c42', '#fff0a0'],
+            ['#1a0d0d', '#ff4e6a', '#ff9a3c', '#ffd166'],
+        ]
+    elif avg_valence < 38:
+        palettes = [
+            ['#00060f', '#1a3a6b', '#2d6fa8', '#7ab8d4'],
+            ['#080010', '#2e1065', '#6d28d9', '#a78bfa'],
+            ['#000a0a', '#0f3d3d', '#1a7a6e', '#4ecdc4'],
+        ]
+    else:
+        palettes = [
+            ['#000d0a', '#0d4a3a', '#1a8a5a', '#52d68a'],
+            ['#050010', '#1a1a4a', '#2d4a8a', '#5b8adb'],
+            ['#0a0508', '#3d1a3d', '#7a2d7a', '#c45bc4'],
+        ]
+
+    bg_col, primary, secondary, accent = palettes[rng.randint(0, len(palettes)-1)]
+
+    def hex_to_rgb(h):
+        h = h.lstrip('#')
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+    bg_rgb = hex_to_rgb(bg_col)
+    p_rgb  = hex_to_rgb(primary)
+    s_rgb  = hex_to_rgb(secondary)
+    a_rgb  = hex_to_rgb(accent)
+
+    img  = Image.new('RGB', (SIZE, SIZE), bg_rgb)
+    draw = ImageDraw.Draw(img)
+
+    # Background gradient
+    for y in range(SIZE):
+        t = y / SIZE
+        r = int(bg_rgb[0] + (p_rgb[0] - bg_rgb[0]) * t * 0.4)
+        g = int(bg_rgb[1] + (p_rgb[1] - bg_rgb[1]) * t * 0.4)
+        b = int(bg_rgb[2] + (p_rgb[2] - bg_rgb[2]) * t * 0.4)
+        draw.line([(0, y), (SIZE, y)], fill=(r, g, b))
+
+    # Number of shapes from BPM
+    n_shapes = int(rng.uniform(6, 10) + (avg_bpm - 80) / 40)
+    n_shapes = max(4, min(16, n_shapes))
+
+    # Shapes: angular for high energy, soft for low energy
+    energy_norm = avg_energy / 100
+
+    for _ in range(n_shapes):
+        cx = rng.randint(20, SIZE-20)
+        cy = rng.randint(20, SIZE-20)
+        sz = rng.randint(20, 90)
+
+        col_choice = rng.random()
+        col = p_rgb if col_choice < 0.5 else (s_rgb if col_choice < 0.8 else a_rgb)
+        brightness = rng.uniform(0.6, 1.1)
+        col = tuple(min(255, int(c * brightness)) for c in col)
+        alpha = rng.randint(60, 160)
+
+        overlay = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
+        odraw   = ImageDraw.Draw(overlay)
+
+        if rng.random() < energy_norm:
+            n_pts  = rng.randint(3, 6)
+            points = []
+            for i in range(n_pts):
+                angle  = (2 * math.pi * i / n_pts) + rng.uniform(-0.4, 0.4)
+                radius = sz * rng.uniform(0.5, 1.0)
+                points.append((cx + int(radius * math.cos(angle)),
+                                cy + int(radius * math.sin(angle))))
+            odraw.polygon(points, fill=col + (alpha,))
+        else:
+            rx = sz
+            ry = int(sz * rng.uniform(0.4, 1.0))
+            odraw.ellipse([cx-rx, cy-ry, cx+rx, cy+ry], fill=col + (alpha,))
+
+        img  = Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
+        draw = ImageDraw.Draw(img)
+
+    # Accent lines for high-energy
+    if avg_energy > 65:
+        n_lines = int((avg_energy - 65) / 10) + rng.randint(1, 3)
+        for _ in range(n_lines):
+            draw.line([(rng.randint(0,SIZE), rng.randint(0,SIZE)),
+                       (rng.randint(0,SIZE), rng.randint(0,SIZE))],
+                      fill=a_rgb + (rng.randint(80, 180),),
+                      width=rng.randint(1, 3))
+
+    # Grain for acoustic
+    if avg_acoustic > 40:
+        grain_strength = int((avg_acoustic - 40) / 60 * 30)
+        pixels = img.load()
+        for gx in range(0, SIZE, 2):
+            for gy in range(0, SIZE, 2):
+                if rng.random() < 0.3:
+                    noise = rng.randint(-grain_strength, grain_strength)
+                    r, g, b = pixels[gx, gy]
+                    pixels[gx, gy] = (max(0, min(255, r+noise)),
+                                      max(0, min(255, g+noise)),
+                                      max(0, min(255, b+noise)))
+
+    # Blur for low energy
+    if avg_energy < 40:
+        img = img.filter(ImageFilter.GaussianBlur(radius=1.2))
+
+    buffer = io.BytesIO()
+    img.save(buffer, format='JPEG', quality=85)
+    return base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+
+def push_playlist_web(access_token, full_name, description, track_ids,
+                       cover_b64=None):
     sp  = spotipy.Spotify(auth=access_token)
     pl  = sp._post('me/playlists', payload={
         'name': full_name, 'public': False, 'description': description
     })
     pid = pl['id']
     url = pl['external_urls']['spotify']
+
     uris = [f'spotify:track:{tid}' for tid in track_ids if pd.notna(tid) and tid]
     for i in range(0, len(uris), 100):
         sp.playlist_add_items(pid, uris[i:i+100])
         time.sleep(0.3)
+
+    # Upload cover art if provided
+    if cover_b64:
+        try:
+            sp.playlist_upload_cover_image(pid, cover_b64)
+        except Exception:
+            pass  # silently skip if image upload fails
+
     return url
 
 
@@ -1258,9 +1545,18 @@ with tab5:
                     continue
                 with st.spinner(f'Creating {pl["full_name"]}...'):
                     try:
+                        subset = df[pl['mask']]
+                        cover  = generate_playlist_art(
+                            pl['full_name'],
+                            subset['Energy'].mean(),
+                            subset['Valence'].mean(),
+                            subset['Acoustic'].mean(),
+                            subset['BPM'].mean(),
+                        )
                         url = push_playlist_web(
                             st.session_state['spotify_token'],
-                            pl['full_name'], pl['desc'], track_ids
+                            pl['full_name'], pl['desc'], track_ids,
+                            cover_b64=cover
                         )
                         results.append({'name': pl['full_name'], 'songs': len(track_ids), 'url': url})
                         progress.progress((i + 1) / len(selected_defs))
@@ -1494,11 +1790,19 @@ with tab6:
                     track_ids = matched.sort_values('rec_score', ascending=False)['Spotify Track Id'].tolist()
                     with st.spinner('Creating playlist...'):
                         try:
+                            cover = generate_playlist_art(
+                                playlist_name_input,
+                                matched['Energy'].mean(),
+                                matched['Valence'].mean(),
+                                matched['Acoustic'].mean(),
+                                matched['BPM'].mean(),
+                            )
                             url = push_playlist_web(
                                 st.session_state['spotify_token'],
                                 playlist_name_input,
                                 f'{vibe_desc} · {n_matched} songs · from {pname} · playlist-analyzer.streamlit.app',
-                                track_ids
+                                track_ids,
+                                cover_b64=cover
                             )
                             st.success(f'Created! [{playlist_name_input}]({url})')
                         except Exception as e:
