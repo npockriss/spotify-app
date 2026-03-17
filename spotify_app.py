@@ -1461,7 +1461,7 @@ with tab6:
                         try:
                             url = push_playlist_web(
                                 st.session_state['spotify_token'],
-                                f'{playlist_name_input} (from {pname})',
+                                playlist_name_input,
                                 f'{vibe_desc} · {n_matched} songs · built with playlist-analyzer.streamlit.app',
                                 track_ids
                             )
