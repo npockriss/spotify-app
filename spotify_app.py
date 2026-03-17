@@ -1391,7 +1391,12 @@ with tab6:
     if n_matched == 0:
         st.warning('No songs match these filters — try widening the ranges.')
     else:
-        st.markdown(f'**{n_matched} songs matched** — *{vibe_desc}*')
+        total_sec = matched['dur_sec'].sum() if 'dur_sec' in matched.columns else 0
+        hours     = int(total_sec // 3600)
+        mins      = int((total_sec % 3600) // 60)
+        runtime   = f'{hours}h {mins}m' if hours > 0 else f'{mins}m'
+
+        st.markdown(f'**{n_matched} songs matched** · *{runtime}* — *{vibe_desc}*')
 
         # Quality metrics for this custom playlist
         idx           = np.where(mask)[0]
