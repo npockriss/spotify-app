@@ -510,7 +510,10 @@ def evaluate_playlists(df, X_raw, X_scaled, playlist_defs):
         results.append({'Playlist': pl['full_name'], 'Songs': n,
                         'Cohesion': cohesion, 'Tightness': tightness,
                         'Cluster Purity': purity})
-    return pd.DataFrame(results).sort_values('Cohesion', ascending=False).reset_index(drop=True)
+        scores_df = pd.DataFrame(results)
+        if 'Cohesion' in scores_df.columns and scores_df['Cohesion'].notna().any():
+            scores_df = scores_df.sort_values('Cohesion', ascending=False)
+        return scores_df.reset_index(drop=True)
 
 
 # ════════════════════════════════════════════════════════════
@@ -964,16 +967,16 @@ try:
     # focused multi-genre: ~18-24
     # eclectic large library: ~24-32
 
-    if avg_std < 15:
+    if avg_std < 18:
         cohesion_blurb = "**Extremely consistent library** — your songs are all in the same sonic lane. Very tight taste."
-    elif avg_std < 20:
-        cohesion_blurb = "**Pretty tight library** — a clear core sound with some variation. Auto-playlists will be focused."
-    elif avg_std < 25:
-        cohesion_blurb = "**Decent variety** — recognizable taste but room for distinct moods."
-    elif avg_std < 30:
-        cohesion_blurb = "**Pretty eclectic** — lots of different sounds. Expect interesting clusters."
+    elif avg_std < 19:
+        cohesion_blurb = "**Tight library** — a clear core sound with minimal variation. Auto-playlists will be focused and cohesive."
+    elif avg_std < 19.8:
+        cohesion_blurb = "**Pretty consistent** — a recognizable sound with some range across moods."
+    elif avg_std < 20.5:
+        cohesion_blurb = "**Good variety** — distinct moods in here. Auto-playlists will cover different vibes."
     else:
-        cohesion_blurb = "**All over the place** — in the best way. Wide range of sounds, lots of distinct clusters."
+        cohesion_blurb = "**Eclectic library** — lots of different sounds. Expect interesting clusters and varied playlists."
 
     st.info(f'{cohesion_blurb} *(feature spread: {avg_std:.1f})*')
 except Exception:
