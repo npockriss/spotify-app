@@ -1325,6 +1325,15 @@ with tab6:
         },
     ]
 
+    focus = st.select_slider(
+        'Playlist focus',
+        options=['Broad', 'Balanced', 'Focused'],
+        value='Balanced',
+        key='byo_focus',
+        help='Broad = more songs, more variety. Focused = fewer songs, tighter vibe.'
+    )
+    st.caption('**Broad** = more songs, looser fit    |    **Focused** = fewer songs, tighter vibe')
+
     preset_col, slider_col = st.columns([1, 2])
 
     with preset_col:
@@ -1372,6 +1381,24 @@ with tab6:
             dance_range = st.slider('Danceability', 0, 100, (0, 100), key='byo_dance_range')
         with col6:
             speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='byo_speech_range')
+
+    # Shrink ranges toward center based on focus setting
+    def tighten(r, amount):
+        mid      = (r[0] + r[1]) / 2
+        half     = (r[1] - r[0]) / 2 * amount
+        return (max(0, int(mid - half)), min(100, int(mid + half)))
+
+    if focus == 'Focused':
+        energy_range   = tighten(energy_range,   0.6)
+        valence_range  = tighten(valence_range,  0.6)
+        acoustic_range = tighten(acoustic_range, 0.6)
+    elif focus == 'Broad':
+        energy_range   = tighten(energy_range,   1.4)
+        valence_range  = tighten(valence_range,  1.4)
+        acoustic_range = tighten(acoustic_range, 1.4)
+    # Balanced = no change
+
+    # Apply filters
 
     # Apply filters
     mask = (
