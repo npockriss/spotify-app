@@ -916,6 +916,10 @@ if not uploaded:
 # ── Run analysis ──────────────────────────────────────────
 file_bytes    = uploaded.read()
 df_raw, pname = load_csv(file_bytes, uploaded.name)
+# Fill missing feature columns with NaN so the app degrades gracefully
+for col in FEATURES:
+    if col not in df_raw.columns:
+        df_raw[col] = np.nan
 
 missing = [f for f in FEATURES if f not in df_raw.columns]
 if len(missing) > 4:
@@ -953,6 +957,7 @@ c5.metric('Avg BPM',      f'{df["BPM"].mean():.0f}')
 overall_sim    = cosine_similarity(X_raw)
 n_all          = len(X_raw)
 upper_all      = overall_sim[np.triu_indices(n_all, k=1)]
+st.caption(f'debug: cohesion = {overall_cohesion:.4f}')
 overall_cohesion = float(upper_all.mean())
 
 if overall_cohesion > 0.95:
