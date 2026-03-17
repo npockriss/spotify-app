@@ -1257,10 +1257,9 @@ with tab6:
     st.caption('Set the vibe you want — the app finds every song in your library that fits.')
 
     # Initialize slider values in session state
-    if 'byo_energy'       not in st.session_state: st.session_state['byo_energy']       = (40, 70)
-    if 'byo_valence'      not in st.session_state: st.session_state['byo_valence']      = (50, 100)
-    if 'byo_acoustic'     not in st.session_state: st.session_state['byo_acoustic']     = (0, 40)
-    if 'byo_preset_label' not in st.session_state: st.session_state['byo_preset_label'] = ''
+    if 'byo_energy'   not in st.session_state: st.session_state['byo_energy']   = (40, 70)
+    if 'byo_valence'  not in st.session_state: st.session_state['byo_valence']  = (50, 100)
+    if 'byo_acoustic' not in st.session_state: st.session_state['byo_acoustic'] = (0, 40)
 
     # Presets
     PRESETS = [
@@ -1333,39 +1332,46 @@ with tab6:
         st.caption('Click one to load suggested ranges — then fine-tune with the sliders.')
         for preset in PRESETS:
             if st.button(preset['label'], use_container_width=True, key=f"preset_{preset['label']}"):
-                st.session_state['byo_energy']       = preset['energy']
-                st.session_state['byo_valence']      = preset['valence']
-                st.session_state['byo_acoustic']     = preset['acoustic']
-                st.session_state['byo_preset_label'] = preset['label']
+                st.session_state['byo_energy_slider']   = preset['energy']
+                st.session_state['byo_valence_slider']  = preset['valence']
+                st.session_state['byo_acoustic_slider'] = preset['acoustic']
+                st.session_state['byo_preset_label']    = preset['label']
                 st.rerun()
-
-    with slider_col:
-        st.markdown('**Energy**')
-        energy_range = st.slider('', 0, 100,
-                                  st.session_state['byo_energy'],
-                                  key='byo_energy_slider',
-                                  label_visibility='collapsed')
-
-        st.markdown('**Valence (mood)**')
-        valence_range = st.slider('', 0, 100,
-                                   st.session_state['byo_valence'],
-                                   key='byo_valence_slider',
-                                   label_visibility='collapsed')
-
-        st.markdown('**Acousticness**')
-        acoustic_range = st.slider('', 0, 100,
-                                    st.session_state['byo_acoustic'],
-                                    key='byo_acoustic_slider',
-                                    label_visibility='collapsed')
 
         with st.expander('More filters (optional)'):
             col4, col5, col6 = st.columns(3)
             with col4:
-                bpm_range = st.slider('BPM', 60, 200, (60, 200), key='byo_bpm_range')
+                bpm_range = st.slider('BPM', 60, 200, (60, 200), key='bpm_range')
             with col5:
-                dance_range = st.slider('Danceability', 0, 100, (0, 100), key='byo_dance_range')
+                dance_range = st.slider('Danceability', 0, 100, (0, 100), key='dance_range')
             with col6:
-                speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='byo_speech_range')
+                speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='speech_range')
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown('**Energy**')
+        energy_range = st.slider('', 0, 100, (40, 70), key='byo_energy_slider',
+                                  label_visibility='collapsed')
+
+    with col2:
+        st.markdown('**Valence (mood)**')
+        valence_range = st.slider('', 0, 100, (50, 100), key='byo_valence_slider',
+                                   label_visibility='collapsed')
+
+    with col3:
+        st.markdown('**Acousticness**')
+        acoustic_range = st.slider('', 0, 100, (0, 40), key='byo_acoustic_slider',
+                                    label_visibility='collapsed')
+
+    # Optional secondary filters in an expander
+    with st.expander('More filters (optional)'):
+        col4, col5, col6 = st.columns(3)
+        with col4:
+            bpm_range = st.slider('BPM', 60, 200, (60, 200), key='byo_bpm_range')
+        with col5:
+            dance_range = st.slider('Danceability', 0, 100, (0, 100), key='byo_dance_range')
+        with col6:
+            speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='byo_speech_range')
 
     # Apply filters
     mask = (
@@ -1424,10 +1430,9 @@ with tab6:
 
         # Playlist name input + push
         st.divider()
-        default_name = st.session_state.get('byo_preset_label') or vibe_desc
         playlist_name_input = st.text_input(
             'Playlist name',
-            value=default_name,
+            value=vibe_desc,
             placeholder='Name your playlist...'
         )
 
