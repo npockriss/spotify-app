@@ -1256,181 +1256,119 @@ with tab6:
     st.subheader('Build your own playlist')
     st.caption('Set the vibe you want — the app finds every song in your library that fits.')
 
-    # Initialize slider values in session state
-    if 'byo_energy'   not in st.session_state: st.session_state['byo_energy']   = (40, 70)
-    if 'byo_valence'  not in st.session_state: st.session_state['byo_valence']  = (50, 100)
-    if 'byo_acoustic' not in st.session_state: st.session_state['byo_acoustic'] = (0, 40)
+    # ── Session state init ────────────────────────────────
+    if 'byo_preset_label' not in st.session_state: st.session_state['byo_preset_label'] = ''
+    if 'byo_energy_slider'   not in st.session_state: st.session_state['byo_energy_slider']   = (40, 70)
+    if 'byo_valence_slider'  not in st.session_state: st.session_state['byo_valence_slider']  = (50, 100)
+    if 'byo_acoustic_slider' not in st.session_state: st.session_state['byo_acoustic_slider'] = (0, 40)
 
-    # Presets
+    # ── Presets ───────────────────────────────────────────
     PRESETS = [
-        {
-            'label':   'aux at a rager',
-            'energy':  (75, 100),
-            'valence': (55, 100),
-            'acoustic':(0, 25),
-        },
-        {
-            'label':   'hanging out in your room',
-            'energy':  (20, 55),
-            'valence': (35, 70),
-            'acoustic':(40, 100),
-        },
-        {
-            'label':   'studying',
-            'energy':  (15, 50),
-            'valence': (30, 65),
-            'acoustic':(35, 100),
-        },
-        {
-            'label':   'sunday morning',
-            'energy':  (10, 45),
-            'valence': (55, 100),
-            'acoustic':(45, 100),
-        },
-        {
-            'label':   'working out',
-            'energy':  (70, 100),
-            'valence': (40, 100),
-            'acoustic':(0, 30),
-        },
-        {
-            'label':   'dinner party',
-            'energy':  (35, 65),
-            'valence': (55, 100),
-            'acoustic':(20, 65),
-        },
-        {
-            'label':   '2am can\'t sleep',
-            'energy':  (0, 40),
-            'valence': (0, 40),
-            'acoustic':(30, 100),
-        },
-        {
-            'label':   'late night drive',
-            'energy':  (50, 80),
-            'valence': (20, 55),
-            'acoustic':(0, 35),
-        },
-        {
-            'label':   'just got dumped',
-            'energy':  (0, 45),
-            'valence': (0, 35),
-            'acoustic':(35, 100),
-        },
-        {
-            'label':   'getting ready to go out',
-            'energy':  (65, 100),
-            'valence': (60, 100),
-            'acoustic':(0, 25),
-        },
+        {'label': 'aux at a rager',         'energy': (75,100), 'valence': (55,100), 'acoustic': (0, 25)},
+        {'label': 'hanging out in your room','energy': (20, 55), 'valence': (35, 70), 'acoustic': (40,100)},
+        {'label': 'studying',               'energy': (15, 50), 'valence': (30, 65), 'acoustic': (35,100)},
+        {'label': 'sunday morning',         'energy': (10, 45), 'valence': (55,100), 'acoustic': (45,100)},
+        {'label': 'working out',            'energy': (78,100), 'valence': (45,100), 'acoustic': (0, 25)},
+        {'label': 'dinner party',           'energy': (35, 65), 'valence': (55,100), 'acoustic': (20, 65)},
+        {'label': "2am can't sleep",        'energy': (0,  40), 'valence': (0,  40), 'acoustic': (30,100)},
+        {'label': 'late night drive',       'energy': (50, 80), 'valence': (20, 55), 'acoustic': (0,  35)},
+        {'label': 'just got dumped',        'energy': (0,  45), 'valence': (0,  35), 'acoustic': (35,100)},
+        {'label': 'getting ready to go out','energy': (65,100), 'valence': (60,100), 'acoustic': (0,  25)},
     ]
 
-    focus = st.select_slider(
-        'Playlist focus',
-        options=['Broad', 'Balanced', 'Focused'],
-        value='Balanced',
-        key='byo_focus',
-        help='Broad = more songs, more variety. Focused = fewer songs, tighter vibe.'
-    )
-    st.caption('**Broad** = more songs, looser fit    |    **Focused** = fewer songs, tighter vibe')
-    
+    # ── Helper ────────────────────────────────────────────
     def tighten(r, amount):
         mid  = (r[0] + r[1]) / 2
         half = (r[1] - r[0]) / 2 * amount
         return (max(0, int(mid - half)), min(100, int(mid + half)))
-    
-    # When focus changes, push updated ranges into slider keys so they move visually
-    current_e  = st.session_state.get('byo_energy_slider',  (40, 70))
-    current_v  = st.session_state.get('byo_valence_slider', (50, 100))
-    current_ac = st.session_state.get('byo_acoustic_slider',(0, 40))
 
-    if focus == 'Focused':
-        st.session_state['byo_energy_slider']   = tighten(current_e,  0.75)
-        st.session_state['byo_valence_slider']  = tighten(current_v,  0.75)
-        st.session_state['byo_acoustic_slider'] = tighten(current_ac, 0.75)
-    elif focus == 'Broad':
-        st.session_state['byo_energy_slider']   = tighten(current_e,  1.25)
-        st.session_state['byo_valence_slider']  = tighten(current_v,  1.25)
-        st.session_state['byo_acoustic_slider'] = tighten(current_ac, 1.25)
-
+    # ── Layout: presets left, sliders right ───────────────
     preset_col, slider_col = st.columns([1, 2])
 
     with preset_col:
         st.markdown('**Presets**')
-        st.caption('Click one to load suggested ranges — then fine-tune with the sliders.')
+        st.caption('Click to load — then fine-tune with sliders.')
         for preset in PRESETS:
-            if st.button(preset['label'], use_container_width=True, key=f"preset_{preset['label']}"):
+            if st.button(preset['label'], use_container_width=True,
+                         key=f"preset_{preset['label']}"):
                 st.session_state['byo_energy_slider']   = preset['energy']
                 st.session_state['byo_valence_slider']  = preset['valence']
                 st.session_state['byo_acoustic_slider'] = preset['acoustic']
                 st.session_state['byo_preset_label']    = preset['label']
+                st.session_state['byo_focus']           = 'Balanced'  # reset focus on new preset
                 st.rerun()
+
+    with slider_col:
+        # Focus slider at top of slider column
+        focus = st.select_slider(
+            'Playlist focus',
+            options=['Broad', 'Balanced', 'Focused'],
+            key='byo_focus',
+            help='Broad = more songs. Focused = tighter vibe, fewer songs.'
+        )
+        st.caption('◀ **Broad** (more songs)  ·  **Focused** (tighter vibe) ▶')
+        st.divider()
+
+        st.markdown('**Energy**')
+        energy_range = st.slider('', 0, 100,
+                                  st.session_state['byo_energy_slider'],
+                                  key='byo_energy_slider',
+                                  label_visibility='collapsed')
+
+        st.markdown('**Valence (mood)**')
+        valence_range = st.slider('', 0, 100,
+                                   st.session_state['byo_valence_slider'],
+                                   key='byo_valence_slider',
+                                   label_visibility='collapsed')
+
+        st.markdown('**Acousticness**')
+        acoustic_range = st.slider('', 0, 100,
+                                    st.session_state['byo_acoustic_slider'],
+                                    key='byo_acoustic_slider',
+                                    label_visibility='collapsed')
 
         with st.expander('More filters (optional)'):
             col4, col5, col6 = st.columns(3)
             with col4:
-                bpm_range = st.slider('BPM', 60, 200, (60, 200), key='bpm_range')
+                bpm_range    = st.slider('BPM', 60, 200, (60, 200), key='byo_bpm_range')
             with col5:
-                dance_range = st.slider('Danceability', 0, 100, (0, 100), key='dance_range')
+                dance_range  = st.slider('Danceability', 0, 100, (0, 100), key='byo_dance_range')
             with col6:
-                speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='speech_range')
-    col1, col2, col3 = st.columns(3)
+                speech_range = st.slider('Speechiness',  0, 100, (0, 100), key='byo_speech_range')
 
-    with col1:
-        st.markdown('**Energy**')
-        energy_range = st.slider('', 0, 100, (40, 70), key='byo_energy_slider',
-                                  label_visibility='collapsed')
-
-    with col2:
-        st.markdown('**Valence (mood)**')
-        valence_range = st.slider('', 0, 100, (50, 100), key='byo_valence_slider',
-                                   label_visibility='collapsed')
-
-    with col3:
-        st.markdown('**Acousticness**')
-        acoustic_range = st.slider('', 0, 100, (0, 40), key='byo_acoustic_slider',
-                                    label_visibility='collapsed')
-
-    # Optional secondary filters in an expander
-    with st.expander('More filters (optional)'):
-        col4, col5, col6 = st.columns(3)
-        with col4:
-            bpm_range = st.slider('BPM', 60, 200, (60, 200), key='byo_bpm_range')
-        with col5:
-            dance_range = st.slider('Danceability', 0, 100, (0, 100), key='byo_dance_range')
-        with col6:
-            speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='byo_speech_range')
+    # ── Apply focus to mask ranges (NOT to sliders — avoids double-tightening) ──
+    e_mask  = energy_range
+    v_mask  = valence_range
+    ac_mask = acoustic_range
 
     if focus != 'Balanced':
-        # Count songs at current ranges before adjusting
+        # Count songs at balanced first to scale factor appropriately
         balanced_count = int((
-            df['Energy'].between(*energy_range) &
-            df['Valence'].between(*valence_range) &
-            df['Acoustic'].between(*acoustic_range)
+            df['Energy'].between(*e_mask) &
+            df['Valence'].between(*v_mask) &
+            df['Acoustic'].between(*ac_mask)
         ).sum())
 
-        # Scale factor based on how many songs already match
         if focus == 'Focused':
-            if balanced_count > 200:   factor = 0.75
-            elif balanced_count > 100: factor = 0.82
-            elif balanced_count > 50:  factor = 0.88
-            else:                      factor = 0.94
+            if balanced_count > 200:   factor = 0.78
+            elif balanced_count > 100: factor = 0.84
+            elif balanced_count > 50:  factor = 0.90
+            else:                      factor = 0.95
         else:  # Broad
-            if balanced_count > 200:   factor = 1.25
-            elif balanced_count > 100: factor = 1.18
-            elif balanced_count > 50:  factor = 1.12
-            else:                      factor = 1.06
+            if balanced_count > 200:   factor = 1.22
+            elif balanced_count > 100: factor = 1.16
+            elif balanced_count > 50:  factor = 1.10
+            else:                      factor = 1.05
 
-        energy_range   = tighten(energy_range,   factor)
-        valence_range  = tighten(valence_range,  factor)
-        acoustic_range = tighten(acoustic_range, factor)
-    # Balanced = no change
+        e_mask  = tighten(e_mask,  factor)
+        v_mask  = tighten(v_mask,  factor)
+        ac_mask = tighten(ac_mask, factor)
 
-    # Apply filters
+    # ── Apply filters ─────────────────────────────────────
     mask = (
-        df['Energy'].between(*energy_range) &
-        df['Valence'].between(*valence_range) &
-        df['Acoustic'].between(*acoustic_range) &
+        df['Energy'].between(*e_mask) &
+        df['Valence'].between(*v_mask) &
+        df['Acoustic'].between(*ac_mask) &
         df['BPM'].between(*bpm_range) &
         df['Dance'].between(*dance_range) &
         df['Speech'].between(*speech_range)
