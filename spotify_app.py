@@ -1333,6 +1333,25 @@ with tab6:
         help='Broad = more songs, more variety. Focused = fewer songs, tighter vibe.'
     )
     st.caption('**Broad** = more songs, looser fit    |    **Focused** = fewer songs, tighter vibe')
+    
+    def tighten(r, amount):
+        mid  = (r[0] + r[1]) / 2
+        half = (r[1] - r[0]) / 2 * amount
+        return (max(0, int(mid - half)), min(100, int(mid + half)))
+    
+    # When focus changes, push updated ranges into slider keys so they move visually
+    current_e  = st.session_state.get('byo_energy_slider',  (40, 70))
+    current_v  = st.session_state.get('byo_valence_slider', (50, 100))
+    current_ac = st.session_state.get('byo_acoustic_slider',(0, 40))
+
+    if focus == 'Focused':
+        st.session_state['byo_energy_slider']   = tighten(current_e,  0.75)
+        st.session_state['byo_valence_slider']  = tighten(current_v,  0.75)
+        st.session_state['byo_acoustic_slider'] = tighten(current_ac, 0.75)
+    elif focus == 'Broad':
+        st.session_state['byo_energy_slider']   = tighten(current_e,  1.25)
+        st.session_state['byo_valence_slider']  = tighten(current_v,  1.25)
+        st.session_state['byo_acoustic_slider'] = tighten(current_ac, 1.25)
 
     preset_col, slider_col = st.columns([1, 2])
 
@@ -1382,20 +1401,14 @@ with tab6:
         with col6:
             speech_range = st.slider('Speechiness', 0, 100, (0, 100), key='byo_speech_range')
 
-    # Shrink ranges toward center based on focus setting
-    def tighten(r, amount):
-        mid      = (r[0] + r[1]) / 2
-        half     = (r[1] - r[0]) / 2 * amount
-        return (max(0, int(mid - half)), min(100, int(mid + half)))
-
     if focus == 'Focused':
-        energy_range   = tighten(energy_range,   0.6)
-        valence_range  = tighten(valence_range,  0.6)
-        acoustic_range = tighten(acoustic_range, 0.6)
+        energy_range   = tighten(energy_range,   0.75)
+        valence_range  = tighten(valence_range,  0.75)
+        acoustic_range = tighten(acoustic_range, 0.75)
     elif focus == 'Broad':
-        energy_range   = tighten(energy_range,   1.4)
-        valence_range  = tighten(valence_range,  1.4)
-        acoustic_range = tighten(acoustic_range, 1.4)
+        energy_range   = tighten(energy_range,   1.25)
+        valence_range  = tighten(valence_range,  1.25)
+        acoustic_range = tighten(acoustic_range, 1.25)
     # Balanced = no change
 
     # Apply filters
